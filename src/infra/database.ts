@@ -2,6 +2,8 @@ import { DataSource } from 'typeorm';
 import type { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
 
 import { env } from '../config/env';
+import { DOMAIN_ENTITIES } from '../domain/entities';
+import { DOMAIN_MIGRATIONS } from '../domain/migrations';
 
 export function createDataSourceOptions(
   overrides: Partial<PostgresConnectionOptions> = {},
@@ -11,8 +13,8 @@ export function createDataSourceOptions(
     url: env.databaseUrl ?? undefined,
     synchronize: false,
     logging: env.nodeEnv === 'development',
-    entities: [],
-    migrations: [],
+    entities: [...DOMAIN_ENTITIES],
+    migrations: [...DOMAIN_MIGRATIONS],
     subscribers: [],
     ...overrides,
   };
