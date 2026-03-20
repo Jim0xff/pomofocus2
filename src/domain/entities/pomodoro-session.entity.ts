@@ -16,7 +16,9 @@ import { Task } from './task.entity';
 
 @Entity({ name: 'pomodoro_sessions' })
 @Index('IDX_pomodoro_sessions_user_id_running', ['userId', 'running'])
+@Index('IDX_pomodoro_sessions_user_id_running_updated_at', ['userId', 'running', 'updatedAt'])
 @Index('IDX_pomodoro_sessions_task_id', ['taskId'])
+@Index('IDX_pomodoro_sessions_user_id_task_id_updated_at', ['userId', 'taskId', 'updatedAt'])
 @Index('IDX_pomodoro_sessions_updated_at', ['updatedAt'])
 export class PomodoroSession {
   @PrimaryGeneratedColumn({ type: 'bigint' })

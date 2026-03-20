@@ -65,6 +65,94 @@ describe('session and service layer', () => {
     });
   });
 
+  it('resets a session back to its mode duration and records a reset event', async () => {
+    const baseRepositories = new MemoryRepositoryBundle();
+    const services = createServices(baseRepositories);
+    const task = await services.tasks.createTask('user-1', {
+      estimatedPomodoros: 2,
+      idempotencyKey: 'idem-task-reset',
+      title: 'Reset me',
+    });
+    const session = await services.sessions.startSession('user-1', {
+      idempotencyKey: 'idem-start-reset',
+      taskId: task.id,
+    });
+
+    await services.sessions.pauseSession('user-1', {
+      idempotencyKey: 'idem-pause-reset',
+      sessionId: session.id,
+    });
+
+    const resetSession = await services.sessions.resetSession('user-1', {
+      idempotencyKey: 'idem-reset-1',
+      sessionId: session.id,
+    });
+
+    expect(resetSession.mode).toBe(PomodoroSessionMode.FOCUS);
+    expect(resetSession.remainingSeconds).toBe(25 * 60);
+    expect(resetSession.running).toBe(false);
+    expect(resetSession.pausedAt?.toISOString()).toBe('2026-03-20T10:00:00.000Z');
+    expect(resetSession.version).toBe(3);
+  });
+
+  it('skips a break by restoring focus mode and resuming the session', async () => {
+    const services = createServices();
+    const task = await services.tasks.createTask('user-1', {
+      estimatedPomodoros: 2,
+      idempotencyKey: 'idem-task-skip-break',
+      title: 'Skip break',
+    });
+    const session = await services.sessions.startSession('user-1', {
+      idempotencyKey: 'idem-start-skip-break',
+      taskId: task.id,
+    });
+    const completedCycle = await services.sessions.completeFocusCycle('user-1', {
+      idempotencyKey: 'idem-cycle-skip-break',
+      sessionId: session.id,
+    });
+
+    const skippedBreak = await services.sessions.skipBreak('user-1', {
+      idempotencyKey: 'idem-skip-break-success',
+      sessionId: completedCycle.session.id,
+    });
+
+    expect(skippedBreak.mode).toBe(PomodoroSessionMode.FOCUS);
+    expect(skippedBreak.remainingSeconds).toBe(25 * 60);
+    expect(skippedBreak.running).toBe(true);
+    expect(skippedBreak.pausedAt).toBeNull();
+    expect(skippedBreak.focusCyclesCompleted).toBe(1);
+    expect(skippedBreak.version).toBe(3);
+  });
+
+  it('marks a paused session with remaining time as restorable in getSessionState', async () => {
+    const services = createServices();
+    const task = await services.tasks.createTask('user-1', {
+      estimatedPomodoros: 1,
+      idempotencyKey: 'idem-task-restore-state',
+      title: 'Restore state',
+    });
+    const session = await services.sessions.startSession('user-1', {
+      idempotencyKey: 'idem-start-restore-state',
+      taskId: task.id,
+    });
+
+    await services.sessions.pauseSession('user-1', {
+      idempotencyKey: 'idem-pause-restore-state',
+      sessionId: session.id,
+    });
+
+    const state = await services.sessions.getSessionState('user-1', task.id);
+
+    expect(state).toMatchObject({
+      id: session.id,
+      mode: PomodoroSessionMode.FOCUS,
+      remainingSeconds: 25 * 60,
+      restorable: true,
+      running: false,
+      taskId: task.id,
+    });
+  });
+
   it('completes tasks explicitly and stores completedAt', async () => {
     const services = createServices();
     const task = await services.tasks.createTask('user-1', {
