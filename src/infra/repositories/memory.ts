@@ -324,6 +324,62 @@ export class MemoryRepositoryBundle implements RepositoryBundle {
   }
 
   public async withTransaction<T>(handler: (repositories: RepositoryBundle) => Promise<T>): Promise<T> {
-    return handler(this);
+    const snapshot = this.createSnapshot();
+
+    try {
+      return await handler(this);
+    } catch (error) {
+      this.restoreSnapshot(snapshot);
+      throw error;
+    }
+  }
+
+  private createSnapshot() {
+    return {
+      eventIdSequence: this.eventIdSequence,
+      events: new Map(
+        Array.from(this.eventsMap.entries(), ([key, value]) => [key, cloneEvent(value)]),
+      ),
+      idempotencyEntries: new Map(
+        Array.from(this.idempotencyMap.entries(), ([key, value]) => [
+          key,
+          cloneIdempotencyKey(value),
+        ]),
+      ),
+      idempotencyIdSequence: this.idempotencyIdSequence,
+      sessionIdSequence: this.sessionIdSequence,
+      sessions: new Map(
+        Array.from(this.sessionsMap.entries(), ([key, value]) => [key, cloneSession(value)]),
+      ),
+      settings: new Map(
+        Array.from(this.settingsMap.entries(), ([key, value]) => [key, cloneSettings(value)]),
+      ),
+      settingsIdSequence: this.settingsIdSequence,
+      taskIdSequence: this.taskIdSequence,
+      tasks: new Map(
+        Array.from(this.tasksMap.entries(), ([key, value]) => [key, cloneTask(value)]),
+      ),
+    };
+  }
+
+  private restoreSnapshot(snapshot: ReturnType<MemoryRepositoryBundle['createSnapshot']>): void {
+    this.taskIdSequence = snapshot.taskIdSequence;
+    this.sessionIdSequence = snapshot.sessionIdSequence;
+    this.settingsIdSequence = snapshot.settingsIdSequence;
+    this.eventIdSequence = snapshot.eventIdSequence;
+    this.idempotencyIdSequence = snapshot.idempotencyIdSequence;
+
+    this.restoreMap(this.tasksMap, snapshot.tasks);
+    this.restoreMap(this.sessionsMap, snapshot.sessions);
+    this.restoreMap(this.settingsMap, snapshot.settings);
+    this.restoreMap(this.eventsMap, snapshot.events);
+    this.restoreMap(this.idempotencyMap, snapshot.idempotencyEntries);
+  }
+
+  private restoreMap<T>(target: Map<string, T>, snapshot: Map<string, T>): void {
+    target.clear();
+    for (const [key, value] of snapshot.entries()) {
+      target.set(key, value);
+    }
   }
 }

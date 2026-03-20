@@ -183,4 +183,55 @@ describe('session and service layer', () => {
       },
     });
   });
+
+  it('rolls back task and session changes when completing a focus cycle fails mid-transaction', async () => {
+    const baseRepositories = new MemoryRepositoryBundle();
+    const repositories: RepositoryBundle = {
+      idempotencyKeys: baseRepositories.idempotencyKeys,
+      progressEvents: {
+        create: (event) => baseRepositories.progressEvents.create(event),
+        save: () => Promise.reject(new Error('progress event write failed')),
+      },
+      sessions: baseRepositories.sessions,
+      settings: baseRepositories.settings,
+      tasks: baseRepositories.tasks,
+      withTransaction: async (handler) => baseRepositories.withTransaction(() => handler(repositories)),
+    };
+    const services = createServices(repositories);
+
+    const task = await services.tasks.createTask('user-1', {
+      estimatedPomodoros: 1,
+      idempotencyKey: 'idem-task-rollback',
+      title: 'Rollback critical path',
+    });
+    const session = await services.sessions.startSession('user-1', {
+      idempotencyKey: 'idem-start-rollback',
+      taskId: task.id,
+    });
+
+    await expect(
+      services.sessions.completeFocusCycle('user-1', {
+        idempotencyKey: 'idem-cycle-rollback',
+        sessionId: session.id,
+      }),
+    ).rejects.toThrow('progress event write failed');
+
+    const persistedTask = await baseRepositories.tasks.findByIdForUser(task.id, 'user-1', {
+      includeArchived: true,
+    });
+    const persistedSession = await baseRepositories.sessions.findByIdForUser(session.id, 'user-1');
+
+    expect(persistedTask).toMatchObject({
+      actualPomodoros: 0,
+      completedAt: null,
+      status: TaskStatus.ACTIVE,
+    });
+    expect(persistedSession).toMatchObject({
+      focusCyclesCompleted: 0,
+      mode: PomodoroSessionMode.FOCUS,
+      remainingSeconds: 25 * 60,
+      running: true,
+      version: 1,
+    });
+  });
 });

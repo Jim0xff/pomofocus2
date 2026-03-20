@@ -4,9 +4,11 @@ import { typeDefs, resolvers, formatGraphQLError, type GraphQLContext } from '..
 import { MemoryRepositoryBundle } from '../../src/infra/repositories/memory';
 import { createServiceContainer, type ServiceContainer } from '../../src/services';
 
-function createBearerToken(subject: string): string {
+function createBearerToken(subjectOrClaims: string | Record<string, unknown>): string {
   const encode = (value: string) => Buffer.from(value).toString('base64url');
-  return `${encode('{"alg":"none","typ":"JWT"}')}.${encode(JSON.stringify({ sub: subject }))}.signature`;
+  const claims =
+    typeof subjectOrClaims === 'string' ? { sub: subjectOrClaims } : subjectOrClaims;
+  return `${encode('{"alg":"none","typ":"JWT"}')}.${encode(JSON.stringify(claims))}.signature`;
 }
 
 async function createTestServer(contextOverrides: Partial<GraphQLContext> = {}) {
@@ -59,6 +61,30 @@ describe('graphql schema', () => {
     expect(response.errors?.[0].message).toBe('Authentication is required.');
     expect(response.errors?.[0].extensions?.code).toBe('UNAUTHORIZED');
     expect(response.errors?.[0].extensions?.requestId).toBe('req-auth-001');
+
+    await server.stop();
+  });
+
+  it('rejects authenticated requests that do not include a subject claim', async () => {
+    const { server } = await createTestServer({
+      requestId: 'req-auth-subject',
+      user: {
+        claims: {
+          aud: 'pomofocus2',
+        },
+        subject: null,
+        token: createBearerToken({ aud: 'pomofocus2' }),
+      },
+    });
+
+    const response = await server.executeOperation({
+      query: 'query { getSettings { focusMinutes } }',
+    });
+
+    expect(response.data).toBeNull();
+    expect(response.errors?.[0].message).toBe('Authentication subject is required.');
+    expect(response.errors?.[0].extensions?.code).toBe('UNAUTHORIZED');
+    expect(response.errors?.[0].extensions?.requestId).toBe('req-auth-subject');
 
     await server.stop();
   });
