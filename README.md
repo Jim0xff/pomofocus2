@@ -1,0 +1,43 @@
+# Pomofocus2 Backend
+
+Phase 1 scaffolds the backend GraphQL service and core infrastructure only. Domain business logic is intentionally deferred.
+
+## Run
+
+1. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+2. Copy the sample environment file and adjust values as needed:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Start the service in development mode:
+
+   ```bash
+   npm run dev
+   ```
+
+4. Verify the scaffold:
+
+   ```bash
+   npm run build
+   npm test
+   ```
+
+If package installation is not available in the environment, there is also a dependency-free smoke test:
+
+```bash
+npm run test:smoke
+```
+
+The service exposes:
+
+- `GET /health`
+- `POST /graphql`
+
+By default the app does not require PostgreSQL or Redis to be reachable on boot. Set `ENABLE_DB_ON_BOOT=true` and/or `ENABLE_REDIS_ON_BOOT=true` to validate those connections during startup.
