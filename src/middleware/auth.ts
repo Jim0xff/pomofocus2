@@ -4,14 +4,20 @@ import { env } from '../config/env';
 import { HttpError } from '../errors/http-error';
 import type { AuthenticatedUser } from '../types/auth';
 
-function buildDecodeTokenUrl(): string {
+function buildDecodeTokenUrl(token?: string): string {
   if (!env.taskPointUrl) {
     throw new HttpError(500, 'AUTH_INTEGRATION_MISCONFIGURED', 'TASK_POINT_URL is not configured.', {
       requestId: undefined,
     });
   }
 
-  return new URL('/user/decodeToken', env.taskPointUrl).toString();
+  const url = new URL('/user/decodeToken', env.taskPointUrl);
+
+  if (token) {
+    url.searchParams.set('token', token);
+  }
+
+  return url.toString();
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -32,6 +38,12 @@ function normalizeClaims(payload: unknown): Record<string, unknown> {
   }
 
   return payload;
+}
+
+function isTemplateEnvelope(
+  payload: unknown,
+): payload is { code: number; data?: unknown; message?: unknown } {
+  return isRecord(payload) && typeof payload.code === 'number';
 }
 
 function extractSubject(claims: Record<string, unknown>): string | null {
@@ -56,17 +68,55 @@ function buildUser(token: string, payload: unknown): AuthenticatedUser {
   };
 }
 
-async function decodeToken(authorizationHeader: string, requestId: string): Promise<unknown> {
-  const response = await fetch(buildDecodeTokenUrl(), {
-    body: JSON.stringify({}),
-    headers: {
-      Authorization: authorizationHeader,
-      'Content-Type': 'application/json',
-      traceId: requestId,
-      'x-server-call': 'true',
-    },
-    method: 'POST',
+async function decodeToken(
+  token: string,
+  authorizationHeader: string | undefined,
+  requestId: string,
+): Promise<unknown> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    traceId: requestId,
+    'x-server-call': 'true',
+  };
+
+  if (authorizationHeader) {
+    headers.Authorization = authorizationHeader;
+  }
+
+  const response = await fetch(buildDecodeTokenUrl(token), {
+    headers,
+    method: 'GET',
   });
+
+  let payload: unknown = {};
+
+  try {
+    payload = await response.json();
+  } catch {
+    payload = {};
+  }
+
+  if (isTemplateEnvelope(payload)) {
+    if (payload.code === 200) {
+      return payload.data ?? {};
+    }
+
+    if (payload.code === 401) {
+      throw new HttpError(401, 'UNAUTHORIZED', 'Invalid token', {
+        requestId,
+      });
+    }
+
+    throw new HttpError(502, 'UPSTREAM_AUTH_ERROR', 'Upstream auth request failed.', {
+      details: {
+        upstreamCode: payload.code,
+        upstreamMessage:
+          typeof payload.message === 'string' && payload.message.length > 0 ? payload.message : undefined,
+        upstreamStatus: response.status,
+      },
+      requestId,
+    });
+  }
 
   if (response.status === 401) {
     throw new HttpError(401, 'UNAUTHORIZED', 'Invalid token', {
@@ -83,11 +133,7 @@ async function decodeToken(authorizationHeader: string, requestId: string): Prom
     });
   }
 
-  try {
-    return await response.json();
-  } catch {
-    return {};
-  }
+  return payload;
 }
 
 export const authMiddleware: RequestHandler = (req, _res, next) => {
@@ -119,7 +165,7 @@ export const authMiddleware: RequestHandler = (req, _res, next) => {
     return;
   }
 
-  void decodeToken(authorizationHeader, req.requestId)
+  void decodeToken(token, authorizationHeader, req.requestId)
     .then((payload) => {
       req.user = buildUser(token, payload);
       next();

@@ -54,10 +54,14 @@ describe('auth middleware', () => {
     const next = jest.fn();
     const fetchMock = jest.fn().mockResolvedValue({
       json: jest.fn().mockResolvedValue({
-        claims: {
-          role: 'member',
-          sub: 'user-123',
+        code: 200,
+        data: {
+          claims: {
+            role: 'member',
+            sub: 'user-123',
+          },
         },
+        message: 'ok',
       }),
       ok: true,
       status: 200,
@@ -68,15 +72,14 @@ describe('auth middleware', () => {
     authMiddleware(req as never, {} as never, next);
     await new Promise(process.nextTick);
 
-    expect(fetchMock).toHaveBeenCalledWith('https://task-point.internal/user/decodeToken', {
-      body: JSON.stringify({}),
+    expect(fetchMock).toHaveBeenCalledWith('https://task-point.internal/user/decodeToken?token=upstream-token', {
       headers: {
         Authorization: 'Bearer upstream-token',
         'Content-Type': 'application/json',
         traceId: 'req-auth-test',
         'x-server-call': 'true',
       },
-      method: 'POST',
+      method: 'GET',
     });
 
     expect(req.user).toEqual({
@@ -97,9 +100,14 @@ describe('auth middleware', () => {
     const next = jest.fn();
 
     global.fetch = jest.fn().mockResolvedValue({
-      ok: false,
-      status: 401,
-    } as Response) as typeof fetch;
+      json: jest.fn().mockResolvedValue({
+        code: 401,
+        data: null,
+        message: 'token invalid',
+      }),
+      ok: true,
+      status: 200,
+    } as unknown as Response) as typeof fetch;
 
     authMiddleware(req as never, {} as never, next);
     await new Promise(process.nextTick);
@@ -121,9 +129,14 @@ describe('auth middleware', () => {
     const next = jest.fn();
 
     global.fetch = jest.fn().mockResolvedValue({
-      ok: false,
-      status: 503,
-    } as Response) as typeof fetch;
+      json: jest.fn().mockResolvedValue({
+        code: 503,
+        data: null,
+        message: 'service unavailable',
+      }),
+      ok: true,
+      status: 200,
+    } as unknown as Response) as typeof fetch;
 
     authMiddleware(req as never, {} as never, next);
     await new Promise(process.nextTick);
@@ -132,13 +145,46 @@ describe('auth middleware', () => {
       expect.objectContaining({
         code: 'UPSTREAM_AUTH_ERROR',
         details: {
-          upstreamStatus: 503,
+          upstreamCode: 503,
+          upstreamMessage: 'service unavailable',
+          upstreamStatus: 200,
         },
         message: 'Upstream auth request failed.',
         requestId: 'req-auth-test',
         statusCode: 502,
       }),
     );
+  });
+
+  it('keeps compatibility with raw downstream payloads', async () => {
+    const req = createMockRequest({
+      authorization: 'Bearer upstream-token',
+    });
+    const next = jest.fn();
+
+    global.fetch = jest.fn().mockResolvedValue({
+      json: jest.fn().mockResolvedValue({
+        claims: {
+          role: 'member',
+          sub: 'user-raw',
+        },
+      }),
+      ok: true,
+      status: 200,
+    } as unknown as Response) as typeof fetch;
+
+    authMiddleware(req as never, {} as never, next);
+    await new Promise(process.nextTick);
+
+    expect(req.user).toEqual({
+      claims: {
+        role: 'member',
+        sub: 'user-raw',
+      },
+      subject: 'user-raw',
+      token: 'upstream-token',
+    });
+    expect(next).toHaveBeenCalledWith();
   });
 
   it('maps downstream exceptions to upstream auth errors', async () => {
