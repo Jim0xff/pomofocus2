@@ -1,24 +1,8 @@
 import type { RequestHandler } from 'express';
 
-import { env } from '../config/env';
 import { HttpError } from '../errors/http-error';
+import { taskPointGet } from '../services/task_point_client';
 import type { AuthenticatedUser } from '../types/auth';
-
-function buildDecodeTokenUrl(token?: string): string {
-  if (!env.taskPointUrl) {
-    throw new HttpError(500, 'AUTH_INTEGRATION_MISCONFIGURED', 'TASK_POINT_URL is not configured.', {
-      requestId: undefined,
-    });
-  }
-
-  const url = new URL('/user/decodeToken', env.taskPointUrl);
-
-  if (token) {
-    url.searchParams.set('token', token);
-  }
-
-  return url.toString();
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -40,12 +24,6 @@ function normalizeClaims(payload: unknown): Record<string, unknown> {
   return payload;
 }
 
-function isTemplateEnvelope(
-  payload: unknown,
-): payload is { code: number; data?: unknown; message?: unknown } {
-  return isRecord(payload) && typeof payload.code === 'number';
-}
-
 function extractSubject(claims: Record<string, unknown>): string | null {
   if (typeof claims.subject === 'string' && claims.subject.length > 0) {
     return claims.subject;
@@ -59,10 +37,32 @@ function extractSubject(claims: Record<string, unknown>): string | null {
     return claims.id;
   }
 
+  if (typeof claims.userId === 'string' && claims.userId.length > 0) {
+    return claims.userId;
+  }
+
+  if (typeof claims.uid === 'string' && claims.uid.length > 0) {
+    return claims.uid;
+  }
+
+  if (typeof claims.ethAddress === 'string' && claims.ethAddress.length > 0) {
+    return claims.ethAddress.toLowerCase();
+  }
+
   if (isRecord(claims.userInfo)) {
     const userInfoId = claims.userInfo.id;
     if (typeof userInfoId === 'string' && userInfoId.length > 0) {
       return userInfoId;
+    }
+
+    const userInfoUserId = claims.userInfo.userId;
+    if (typeof userInfoUserId === 'string' && userInfoUserId.length > 0) {
+      return userInfoUserId;
+    }
+
+    const userInfoEth = claims.userInfo.ethAddress;
+    if (typeof userInfoEth === 'string' && userInfoEth.length > 0) {
+      return userInfoEth.toLowerCase();
     }
   }
 
@@ -85,67 +85,13 @@ async function decodeToken(
   authorizationHeader: string | undefined,
   requestId: string,
 ): Promise<unknown> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    traceId: requestId,
-    'x-server-call': 'true',
-  };
-
-  if (authorizationHeader) {
-    headers.Authorization = authorizationHeader;
-  }
-
-  const response = await fetch(buildDecodeTokenUrl(token), {
-    headers,
-    method: 'GET',
-  });
-
-  let payload: unknown = {};
-
-  try {
-    payload = await response.json();
-  } catch {
-    payload = {};
-  }
-
-  if (isTemplateEnvelope(payload)) {
-    if (payload.code === 200) {
-      return payload.data ?? {};
-    }
-
-    if (payload.code === 401) {
-      throw new HttpError(401, 'UNAUTHORIZED', 'Invalid token', {
-        requestId,
-      });
-    }
-
-    throw new HttpError(502, 'UPSTREAM_AUTH_ERROR', 'Upstream auth request failed.', {
-      details: {
-        upstreamCode: payload.code,
-        upstreamMessage:
-          typeof payload.message === 'string' && payload.message.length > 0 ? payload.message : undefined,
-        upstreamStatus: response.status,
-      },
-      requestId,
-    });
-  }
-
-  if (response.status === 401) {
-    throw new HttpError(401, 'UNAUTHORIZED', 'Invalid token', {
-      requestId,
-    });
-  }
-
-  if (!response.ok) {
-    throw new HttpError(502, 'UPSTREAM_AUTH_ERROR', 'Upstream auth request failed.', {
-      details: {
-        upstreamStatus: response.status,
-      },
-      requestId,
-    });
-  }
-
-  return payload;
+  return taskPointGet(
+    '/user/decodeToken',
+    { token },
+    null,
+    true,
+    { requestId, authorizationHeader },
+  );
 }
 
 export const authMiddleware: RequestHandler = (req, _res, next) => {
