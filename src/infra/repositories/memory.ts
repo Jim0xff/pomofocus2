@@ -1,4 +1,6 @@
 import {
+  IdempotencyKey,
+  IdempotencyKeyStatus,
   PomodoroSession,
   Task,
   TaskProgressEvent,
@@ -6,6 +8,7 @@ import {
   UserSettings,
 } from '../../domain/entities';
 import type {
+  IdempotencyKeyRepositoryContract,
   ProgressEventRepositoryContract,
   RepositoryBundle,
   SessionRepositoryContract,
@@ -21,6 +24,16 @@ function cloneTask(task: Task): Task {
     createdAt: new Date(task.createdAt),
     deletedAt: task.deletedAt ? new Date(task.deletedAt) : null,
     updatedAt: new Date(task.updatedAt),
+  });
+}
+
+function cloneIdempotencyKey(entry: IdempotencyKey): IdempotencyKey {
+  return Object.assign(new IdempotencyKey(), {
+    ...entry,
+    createdAt: new Date(entry.createdAt),
+    expiresAt: new Date(entry.expiresAt),
+    responseSnapshot: entry.responseSnapshot ? structuredClone(entry.responseSnapshot) : null,
+    updatedAt: new Date(entry.updatedAt),
   });
 }
 
@@ -150,6 +163,18 @@ class MemorySessionRepository implements SessionRepositoryContract {
 
     return cloneSession(persisted);
   }
+
+  public async saveWithVersion(
+    session: PomodoroSession,
+    expectedVersion: number,
+  ): Promise<PomodoroSession | null> {
+    const current = session.id ? this.sessions.get(session.id) : undefined;
+    if (!current || current.version !== expectedVersion) {
+      return null;
+    }
+
+    return this.save(session);
+  }
 }
 
 class MemorySettingsRepository implements SettingsRepositoryContract {
@@ -204,17 +229,78 @@ class MemoryProgressEventRepository implements ProgressEventRepositoryContract {
   }
 }
 
+class MemoryIdempotencyKeyRepository implements IdempotencyKeyRepositoryContract {
+  public constructor(
+    private readonly entries: Map<string, IdempotencyKey>,
+    private readonly nextId: () => string,
+  ) {}
+
+  public create(entry: Partial<IdempotencyKey>): IdempotencyKey {
+    return Object.assign(new IdempotencyKey(), {
+      lockOwner: null,
+      responseSnapshot: null,
+      status: IdempotencyKeyStatus.PENDING,
+      ...entry,
+    });
+  }
+
+  public async deleteByOperationAndKey(operation: string, key: string): Promise<void> {
+    this.entries.delete(`${operation}:${key}`);
+  }
+
+  public async findByOperationAndKey(operation: string, key: string): Promise<IdempotencyKey | null> {
+    const entry = this.entries.get(`${operation}:${key}`);
+    return entry ? cloneIdempotencyKey(entry) : null;
+  }
+
+  public async insert(entry: IdempotencyKey): Promise<IdempotencyKey | null> {
+    const compositeKey = `${entry.operation}:${entry.idemKey}`;
+    if (this.entries.has(compositeKey)) {
+      return null;
+    }
+
+    const now = new Date();
+    const persisted = cloneIdempotencyKey(
+      Object.assign(entry, {
+        createdAt: entry.createdAt ?? now,
+        id: entry.id || this.nextId(),
+        updatedAt: entry.updatedAt ?? now,
+      }),
+    );
+    this.entries.set(compositeKey, cloneIdempotencyKey(persisted));
+    return cloneIdempotencyKey(persisted);
+  }
+
+  public async save(entry: IdempotencyKey): Promise<IdempotencyKey> {
+    const compositeKey = `${entry.operation}:${entry.idemKey}`;
+    const existing = this.entries.get(compositeKey);
+    const now = new Date();
+    const persisted = cloneIdempotencyKey(
+      Object.assign(entry, {
+        createdAt: existing?.createdAt ?? entry.createdAt ?? now,
+        id: existing?.id ?? entry.id ?? this.nextId(),
+        updatedAt: now,
+      }),
+    );
+    this.entries.set(compositeKey, cloneIdempotencyKey(persisted));
+    return cloneIdempotencyKey(persisted);
+  }
+}
+
 export class MemoryRepositoryBundle implements RepositoryBundle {
   private taskIdSequence = 0;
   private sessionIdSequence = 0;
   private settingsIdSequence = 0;
   private eventIdSequence = 0;
+  private idempotencyIdSequence = 0;
 
   private readonly tasksMap = new Map<string, Task>();
   private readonly sessionsMap = new Map<string, PomodoroSession>();
   private readonly settingsMap = new Map<string, UserSettings>();
   private readonly eventsMap = new Map<string, TaskProgressEvent>();
+  private readonly idempotencyMap = new Map<string, IdempotencyKey>();
 
+  public readonly idempotencyKeys: IdempotencyKeyRepositoryContract;
   public readonly progressEvents: ProgressEventRepositoryContract;
   public readonly sessions: SessionRepositoryContract;
   public readonly settings: SettingsRepositoryContract;
@@ -231,5 +317,13 @@ export class MemoryRepositoryBundle implements RepositoryBundle {
       this.eventsMap,
       () => String(++this.eventIdSequence),
     );
+    this.idempotencyKeys = new MemoryIdempotencyKeyRepository(
+      this.idempotencyMap,
+      () => String(++this.idempotencyIdSequence),
+    );
+  }
+
+  public async withTransaction<T>(handler: (repositories: RepositoryBundle) => Promise<T>): Promise<T> {
+    return handler(this);
   }
 }

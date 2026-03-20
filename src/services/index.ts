@@ -3,7 +3,7 @@ export {
   type CreateServiceContainerOptions,
   type ServiceContainer,
 } from './container';
-export { PassthroughIdempotencyService, type IdempotencyService } from './idempotency.service';
+export { DefaultIdempotencyService, type IdempotencyService } from './idempotency.service';
 export {
   SessionService,
   type SessionMutationInput,

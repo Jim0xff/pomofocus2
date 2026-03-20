@@ -1,6 +1,7 @@
 import type { DataSource } from 'typeorm';
 
 import {
+  IdempotencyKey,
   PomodoroSession,
   Task,
   TaskProgressEvent,
@@ -26,6 +27,7 @@ export interface SessionRepositoryContract {
   findByIdForUser(sessionId: string, userId: string): Promise<PomodoroSession | null>;
   findLatestByTask(userId: string, taskId: string): Promise<PomodoroSession | null>;
   save(session: PomodoroSession): Promise<PomodoroSession>;
+  saveWithVersion(session: PomodoroSession, expectedVersion: number): Promise<PomodoroSession | null>;
 }
 
 export interface SettingsRepositoryContract {
@@ -39,11 +41,21 @@ export interface ProgressEventRepositoryContract {
   save(event: TaskProgressEvent): Promise<TaskProgressEvent>;
 }
 
+export interface IdempotencyKeyRepositoryContract {
+  create(entry: Partial<IdempotencyKey>): IdempotencyKey;
+  deleteByOperationAndKey(operation: string, key: string): Promise<void>;
+  findByOperationAndKey(operation: string, key: string): Promise<IdempotencyKey | null>;
+  insert(entry: IdempotencyKey): Promise<IdempotencyKey | null>;
+  save(entry: IdempotencyKey): Promise<IdempotencyKey>;
+}
+
 export interface RepositoryBundle {
+  idempotencyKeys: IdempotencyKeyRepositoryContract;
   progressEvents: ProgressEventRepositoryContract;
   sessions: SessionRepositoryContract;
   settings: SettingsRepositoryContract;
   tasks: TaskRepositoryContract;
+  withTransaction<T>(handler: (repositories: RepositoryBundle) => Promise<T>): Promise<T>;
 }
 
 export interface RepositoryBundleFactoryOptions {

@@ -39,8 +39,19 @@ export async function bootstrap(): Promise<http.Server> {
   await initializeInfrastructure();
 
   const app = createApp();
+  const redisClient = getRedisClient();
   const services = createServiceContainer({
     dataSource: appDataSource,
+    redisClient:
+      redisClient === null
+        ? null
+        : {
+            del: (key: string) => redisClient.del(key),
+            get: (key: string) => redisClient.get(key),
+            isOpen: redisClient.isOpen,
+            set: (key: string, value: string, options) => redisClient.set(key, value, options as any),
+          },
+    strictIdempotency: env.idempotencyStrictMode,
   });
   const apolloServer = new ApolloServer({
     typeDefs,

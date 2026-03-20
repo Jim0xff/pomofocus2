@@ -5,6 +5,7 @@ export {
   type TaskVisibilityOptions,
 } from './task.repository';
 export type {
+  IdempotencyKeyRepositoryContract,
   ProgressEventRepositoryContract,
   RepositoryBundle,
   RepositoryBundleFactoryOptions,

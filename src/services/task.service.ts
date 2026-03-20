@@ -1,5 +1,5 @@
 import { TaskStatus } from '../domain/entities';
-import type { TaskRepositoryContract } from '../domain/repositories';
+import type { RepositoryBundle, TaskRepositoryContract } from '../domain/repositories';
 import type { IdempotencyService } from './idempotency.service';
 import { ServiceError } from './service-error';
 
@@ -22,7 +22,7 @@ export interface CompleteTaskInput {
 
 export class TaskService {
   public constructor(
-    private readonly taskRepository: TaskRepositoryContract,
+    private readonly repositories: Pick<RepositoryBundle, 'tasks' | 'withTransaction'>,
     private readonly idempotencyService: IdempotencyService,
     private readonly now: () => Date = () => new Date(),
   ) {}
@@ -31,7 +31,7 @@ export class TaskService {
     userId: string,
     options: { includeArchived?: boolean; status?: string | null },
   ) {
-    return this.taskRepository.findByUser(userId, {
+    return this.repositories.tasks.findByUser(userId, {
       includeArchived: options.includeArchived ?? false,
       status: options.status ?? undefined,
     });
@@ -59,17 +59,19 @@ export class TaskService {
 
     return this.idempotencyService.run({
       execute: async () =>
-        this.taskRepository.save(
-          this.taskRepository.create({
-            actualPomodoros: 0,
-            completedAt: null,
-            deletedAt: null,
-            deletedBy: null,
-            estimatedPomodoros: input.estimatedPomodoros,
-            status: TaskStatus.ACTIVE,
-            title,
-            userId,
-          }),
+        this.repositories.withTransaction(async (repositories) =>
+          repositories.tasks.save(
+            repositories.tasks.create({
+              actualPomodoros: 0,
+              completedAt: null,
+              deletedAt: null,
+              deletedBy: null,
+              estimatedPomodoros: input.estimatedPomodoros,
+              status: TaskStatus.ACTIVE,
+              title,
+              userId,
+            }),
+          ),
         ),
       input,
       key: input.idempotencyKey,
@@ -80,19 +82,21 @@ export class TaskService {
   public async archiveTask(userId: string, input: ArchiveTaskInput) {
     return this.idempotencyService.run({
       execute: async () => {
-        const task = await this.getTaskOrThrow(userId, input.taskId, true);
-        const now = this.now();
+        return this.repositories.withTransaction(async (repositories) => {
+          const task = await this.getTaskOrThrow(repositories.tasks, userId, input.taskId, true);
+          const now = this.now();
 
-        task.status = TaskStatus.ARCHIVED;
-        task.deletedAt = now;
-        task.deletedBy = userId;
+          task.status = TaskStatus.ARCHIVED;
+          task.deletedAt = now;
+          task.deletedBy = userId;
 
-        await this.taskRepository.save(task);
+          await repositories.tasks.save(task);
 
-        return {
-          code: 200,
-          message: input.reason?.trim() ? `ok: ${input.reason.trim()}` : 'ok',
-        };
+          return {
+            code: 200,
+            message: input.reason?.trim() ? `ok: ${input.reason.trim()}` : 'ok',
+          };
+        });
       },
       input,
       key: input.idempotencyKey,
@@ -103,22 +107,24 @@ export class TaskService {
   public async completeTask(userId: string, input: CompleteTaskInput) {
     return this.idempotencyService.run({
       execute: async () => {
-        const task = await this.getTaskOrThrow(userId, input.taskId, false);
+        return this.repositories.withTransaction(async (repositories) => {
+          const task = await this.getTaskOrThrow(repositories.tasks, userId, input.taskId, false);
 
-        if (task.status !== TaskStatus.ACTIVE) {
-          throw new ServiceError('INVALID_TASK_STATE', 'Only active tasks can be completed.', {
-            details: {
-              status: task.status,
-              taskId: input.taskId,
-            },
-            statusCode: 400,
-          });
-        }
+          if (task.status !== TaskStatus.ACTIVE) {
+            throw new ServiceError('INVALID_TASK_STATE', 'Only active tasks can be completed.', {
+              details: {
+                status: task.status,
+                taskId: input.taskId,
+              },
+              statusCode: 400,
+            });
+          }
 
-        task.status = TaskStatus.COMPLETED;
-        task.completedAt = this.now();
+          task.status = TaskStatus.COMPLETED;
+          task.completedAt = this.now();
 
-        return this.taskRepository.save(task);
+          return repositories.tasks.save(task);
+        });
       },
       input,
       key: input.idempotencyKey,
@@ -126,8 +132,13 @@ export class TaskService {
     });
   }
 
-  public async getTaskOrThrow(userId: string, taskId: string, includeArchived: boolean) {
-    const task = await this.taskRepository.findByIdForUser(taskId, userId, {
+  public async getTaskOrThrow(
+    taskRepository: TaskRepositoryContract,
+    userId: string,
+    taskId: string,
+    includeArchived: boolean,
+  ) {
+    const task = await taskRepository.findByIdForUser(taskId, userId, {
       includeArchived,
     });
 

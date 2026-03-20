@@ -1,6 +1,7 @@
-import { type DataSource, type Repository } from 'typeorm';
+import { QueryFailedError, type DataSource, type EntityManager, type Repository } from 'typeorm';
 
 import {
+  IdempotencyKey,
   PomodoroSession,
   Task,
   TaskProgressEvent,
@@ -9,6 +10,7 @@ import {
 } from '../../domain/entities';
 import {
   buildTaskWhere,
+  type IdempotencyKeyRepositoryContract,
   type ProgressEventRepositoryContract,
   type RepositoryBundle,
   type SessionRepositoryContract,
@@ -108,6 +110,36 @@ class TypeOrmSessionRepository implements SessionRepositoryContract {
   public async save(session: PomodoroSession): Promise<PomodoroSession> {
     return this.repository.save(session);
   }
+
+  public async saveWithVersion(
+    session: PomodoroSession,
+    expectedVersion: number,
+  ): Promise<PomodoroSession | null> {
+    const result = await this.repository
+      .createQueryBuilder()
+      .update(PomodoroSession)
+      .set({
+        endedAt: session.endedAt,
+        focusCyclesCompleted: session.focusCyclesCompleted,
+        mode: session.mode,
+        pausedAt: session.pausedAt,
+        remainingSeconds: session.remainingSeconds,
+        running: session.running,
+        startedAt: session.startedAt,
+        taskId: session.taskId,
+        version: session.version,
+      })
+      .where('id = :id', { id: session.id })
+      .andWhere('user_id = :userId', { userId: session.userId })
+      .andWhere('version = :expectedVersion', { expectedVersion })
+      .execute();
+
+    if (!result.affected) {
+      return null;
+    }
+
+    return this.findByIdForUser(session.id, session.userId);
+  }
 }
 
 class TypeOrmSettingsRepository implements SettingsRepositoryContract {
@@ -142,11 +174,74 @@ class TypeOrmProgressEventRepository implements ProgressEventRepositoryContract 
   }
 }
 
-export function createTypeOrmRepositoryBundle(dataSource: DataSource): RepositoryBundle {
+class TypeOrmIdempotencyKeyRepository implements IdempotencyKeyRepositoryContract {
+  public constructor(private readonly repository: Repository<IdempotencyKey>) {}
+
+  public create(entry: Partial<IdempotencyKey>): IdempotencyKey {
+    return this.repository.create(entry);
+  }
+
+  public async deleteByOperationAndKey(operation: string, key: string): Promise<void> {
+    await this.repository.delete({
+      idemKey: key,
+      operation,
+    });
+  }
+
+  public async findByOperationAndKey(operation: string, key: string): Promise<IdempotencyKey | null> {
+    return this.repository.findOne({
+      where: {
+        idemKey: key,
+        operation,
+      },
+    });
+  }
+
+  public async insert(entry: IdempotencyKey): Promise<IdempotencyKey | null> {
+    try {
+      await this.repository.insert(entry as any);
+      return this.findByOperationAndKey(entry.operation, entry.idemKey);
+    } catch (error) {
+      if (
+        error instanceof QueryFailedError &&
+        typeof error.driverError === 'object' &&
+        error.driverError !== null &&
+        'code' in error.driverError &&
+        error.driverError.code === '23505'
+      ) {
+        return null;
+      }
+
+      throw error;
+    }
+  }
+
+  public async save(entry: IdempotencyKey): Promise<IdempotencyKey> {
+    return this.repository.save(entry);
+  }
+}
+
+function createTypeOrmRepositoryBundleFromManager(
+  manager: Pick<EntityManager, 'getRepository'>,
+  withTransaction: RepositoryBundle['withTransaction'],
+): RepositoryBundle {
   return {
-    progressEvents: new TypeOrmProgressEventRepository(dataSource.getRepository(TaskProgressEvent)),
-    sessions: new TypeOrmSessionRepository(dataSource.getRepository(PomodoroSession)),
-    settings: new TypeOrmSettingsRepository(dataSource.getRepository(UserSettings)),
-    tasks: new TypeOrmTaskRepository(dataSource.getRepository(Task)),
+    idempotencyKeys: new TypeOrmIdempotencyKeyRepository(manager.getRepository(IdempotencyKey)),
+    progressEvents: new TypeOrmProgressEventRepository(manager.getRepository(TaskProgressEvent)),
+    sessions: new TypeOrmSessionRepository(manager.getRepository(PomodoroSession)),
+    settings: new TypeOrmSettingsRepository(manager.getRepository(UserSettings)),
+    tasks: new TypeOrmTaskRepository(manager.getRepository(Task)),
+    withTransaction,
   };
+}
+
+export function createTypeOrmRepositoryBundle(dataSource: DataSource): RepositoryBundle {
+  const withTransaction: RepositoryBundle['withTransaction'] = async (handler) =>
+    dataSource.transaction(async (manager) =>
+      handler(createTypeOrmRepositoryBundleFromManager(manager, async (nestedHandler) =>
+        nestedHandler(createTypeOrmRepositoryBundleFromManager(manager, withTransaction)),
+      )),
+    );
+
+  return createTypeOrmRepositoryBundleFromManager(dataSource.manager, withTransaction);
 }

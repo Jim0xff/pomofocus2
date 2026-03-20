@@ -1,12 +1,16 @@
 import { PomodoroSessionMode, TaskStatus } from '../../src/domain/entities';
+import type {
+  RepositoryBundle,
+  SessionRepositoryContract,
+} from '../../src/domain/repositories';
 import { MemoryRepositoryBundle } from '../../src/infra/repositories/memory';
 import { createServiceContainer } from '../../src/services';
 
 describe('session and service layer', () => {
-  function createServices() {
+  function createServices(repositories: RepositoryBundle = new MemoryRepositoryBundle()) {
     return createServiceContainer({
       now: () => new Date('2026-03-20T10:00:00.000Z'),
-      repositories: new MemoryRepositoryBundle(),
+      repositories,
     });
   }
 
@@ -89,6 +93,94 @@ describe('session and service layer', () => {
     ).rejects.toMatchObject({
       code: 'INVALID_SETTINGS',
       message: 'alarmVolume must be between 0 and 100.',
+    });
+  });
+
+  it('replays duplicate idempotent requests and rejects request hash mismatches', async () => {
+    const services = createServices();
+
+    const firstTask = await services.tasks.createTask('user-1', {
+      estimatedPomodoros: 2,
+      idempotencyKey: 'idem-create-duplicate',
+      title: 'Replay me',
+    });
+    const replayedTask = await services.tasks.createTask('user-1', {
+      estimatedPomodoros: 2,
+      idempotencyKey: 'idem-create-duplicate',
+      title: 'Replay me',
+    });
+    const tasks = await services.tasks.listTasks('user-1', {});
+
+    expect(replayedTask.id).toBe(firstTask.id);
+    expect(replayedTask.createdAt).toBeInstanceOf(Date);
+    expect(tasks).toHaveLength(1);
+
+    await expect(
+      services.tasks.createTask('user-1', {
+        estimatedPomodoros: 3,
+        idempotencyKey: 'idem-create-duplicate',
+        title: 'Different payload',
+      }),
+    ).rejects.toMatchObject({
+      code: 'IDEMPOTENCY_CONFLICT',
+      details: {
+        conflictType: 'REQUEST_HASH_MISMATCH',
+      },
+    });
+  });
+
+  it('raises a concurrent update conflict when a session version is stale', async () => {
+    const baseRepositories = new MemoryRepositoryBundle();
+    let failNextVersionedSave = true;
+
+    const sessions: SessionRepositoryContract = {
+      create: (session) => baseRepositories.sessions.create(session),
+      findActiveByUser: (userId) => baseRepositories.sessions.findActiveByUser(userId),
+      findByIdForUser: (sessionId, userId) =>
+        baseRepositories.sessions.findByIdForUser(sessionId, userId),
+      findLatestByTask: (userId, taskId) => baseRepositories.sessions.findLatestByTask(userId, taskId),
+      save: (session) => baseRepositories.sessions.save(session),
+      saveWithVersion: async (session, expectedVersion) => {
+        if (failNextVersionedSave) {
+          failNextVersionedSave = false;
+          return null;
+        }
+
+        return baseRepositories.sessions.saveWithVersion(session, expectedVersion);
+      },
+    };
+
+    const repositories: RepositoryBundle = {
+      idempotencyKeys: baseRepositories.idempotencyKeys,
+      progressEvents: baseRepositories.progressEvents,
+      sessions,
+      settings: baseRepositories.settings,
+      tasks: baseRepositories.tasks,
+      withTransaction: async (handler) => handler(repositories),
+    };
+    const services = createServices(repositories);
+
+    const task = await services.tasks.createTask('user-1', {
+      estimatedPomodoros: 1,
+      idempotencyKey: 'idem-task-concurrency',
+      title: 'Concurrency',
+    });
+    const session = await services.sessions.startSession('user-1', {
+      idempotencyKey: 'idem-start-concurrency',
+      taskId: task.id,
+    });
+
+    await expect(
+      services.sessions.pauseSession('user-1', {
+        idempotencyKey: 'idem-pause-concurrency',
+        sessionId: session.id,
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONCURRENT_UPDATE_CONFLICT',
+      details: {
+        expectedVersion: 1,
+        sessionId: session.id,
+      },
     });
   });
 });

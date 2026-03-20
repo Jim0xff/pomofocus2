@@ -11,6 +11,7 @@ interface RawEnv {
   ENABLE_DB_ON_BOOT?: string;
   ENABLE_REDIS_ON_BOOT?: string;
   GRAPHQL_PATH?: string;
+  IDEMPOTENCY_STRICT_MODE?: string;
   LOG_LEVEL?: string;
   NODE_ENV?: string;
   PORT?: string;
@@ -23,6 +24,7 @@ export interface EnvConfig {
   enableDbOnBoot: boolean;
   enableRedisOnBoot: boolean;
   graphqlPath: string;
+  idempotencyStrictMode: boolean;
   logLevel: string;
   nodeEnv: string;
   port: number;
@@ -67,6 +69,7 @@ export function loadEnv(source: RawEnv = process.env): EnvConfig {
     enableDbOnBoot: parseBoolean(source.ENABLE_DB_ON_BOOT, false),
     enableRedisOnBoot: parseBoolean(source.ENABLE_REDIS_ON_BOOT, false),
     graphqlPath: normalizePath(source.GRAPHQL_PATH),
+    idempotencyStrictMode: parseBoolean(source.IDEMPOTENCY_STRICT_MODE, false),
     logLevel: source.LOG_LEVEL?.trim() || 'info',
     nodeEnv: source.NODE_ENV?.trim() || 'development',
     port: parsePort(source.PORT),

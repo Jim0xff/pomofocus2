@@ -1,5 +1,6 @@
+import type { RepositoryBundle, SettingsRepositoryContract } from '../domain/repositories';
+import type { IdempotencyService } from './idempotency.service';
 import { UserSettings } from '../domain/entities';
-import type { SettingsRepositoryContract } from '../domain/repositories';
 import { ServiceError } from './service-error';
 
 export interface UpdateSettingsInput {
@@ -15,16 +16,19 @@ export interface UpdateSettingsInput {
 }
 
 export class SettingsService {
-  public constructor(private readonly settingsRepository: SettingsRepositoryContract) {}
+  public constructor(
+    private readonly repositories: Pick<RepositoryBundle, 'settings' | 'withTransaction'>,
+    private readonly idempotencyService: IdempotencyService,
+  ) {}
 
   public async getSettings(userId: string): Promise<UserSettings> {
-    const existing = await this.settingsRepository.findByUserId(userId);
+    const existing = await this.repositories.settings.findByUserId(userId);
     if (existing) {
       return existing;
     }
 
-    return this.settingsRepository.save(
-      this.settingsRepository.create({
+    return this.repositories.settings.save(
+      this.repositories.settings.create({
         alarmSound: 'classic',
         alarmVolume: 80,
         backgroundSoundEnabled: false,
@@ -66,43 +70,51 @@ export class SettingsService {
       }
     }
 
-    const settings = await this.getSettings(userId);
+    return this.idempotencyService.run({
+      execute: async () =>
+        this.repositories.withTransaction(async (repositories) => {
+          const settings = await this.getOrCreateSettings(repositories.settings, userId);
 
-    if (input.alarmSound !== undefined && input.alarmSound !== null) {
-      settings.alarmSound = input.alarmSound;
-    }
+          if (input.alarmSound !== undefined && input.alarmSound !== null) {
+            settings.alarmSound = input.alarmSound;
+          }
 
-    if (input.alarmVolume !== undefined && input.alarmVolume !== null) {
-      settings.alarmVolume = input.alarmVolume;
-    }
+          if (input.alarmVolume !== undefined && input.alarmVolume !== null) {
+            settings.alarmVolume = input.alarmVolume;
+          }
 
-    if (input.backgroundSoundEnabled !== undefined && input.backgroundSoundEnabled !== null) {
-      settings.backgroundSoundEnabled = input.backgroundSoundEnabled;
-    }
+          if (input.backgroundSoundEnabled !== undefined && input.backgroundSoundEnabled !== null) {
+            settings.backgroundSoundEnabled = input.backgroundSoundEnabled;
+          }
 
-    if (input.backgroundSoundType !== undefined) {
-      settings.backgroundSoundType = input.backgroundSoundType;
-    }
+          if (input.backgroundSoundType !== undefined) {
+            settings.backgroundSoundType = input.backgroundSoundType;
+          }
 
-    if (input.focusMinutes !== undefined && input.focusMinutes !== null) {
-      settings.focusMinutes = input.focusMinutes;
-    }
+          if (input.focusMinutes !== undefined && input.focusMinutes !== null) {
+            settings.focusMinutes = input.focusMinutes;
+          }
 
-    if (input.shortBreakMinutes !== undefined && input.shortBreakMinutes !== null) {
-      settings.shortBreakMinutes = input.shortBreakMinutes;
-    }
+          if (input.shortBreakMinutes !== undefined && input.shortBreakMinutes !== null) {
+            settings.shortBreakMinutes = input.shortBreakMinutes;
+          }
 
-    if (input.longBreakMinutes !== undefined && input.longBreakMinutes !== null) {
-      settings.longBreakMinutes = input.longBreakMinutes;
-    }
+          if (input.longBreakMinutes !== undefined && input.longBreakMinutes !== null) {
+            settings.longBreakMinutes = input.longBreakMinutes;
+          }
 
-    if (input.longBreakInterval !== undefined && input.longBreakInterval !== null) {
-      settings.longBreakInterval = input.longBreakInterval;
-    }
+          if (input.longBreakInterval !== undefined && input.longBreakInterval !== null) {
+            settings.longBreakInterval = input.longBreakInterval;
+          }
 
-    settings.updatedBy = userId;
+          settings.updatedBy = userId;
 
-    return this.settingsRepository.save(settings);
+          return repositories.settings.save(settings);
+        }),
+      input,
+      key: input.idempotencyKey,
+      operation: 'updateSettings',
+    });
   }
 
   private validateMinutes(field: string, value: number | null | undefined): void {
@@ -118,5 +130,30 @@ export class SettingsService {
         statusCode: 400,
       });
     }
+  }
+
+  private async getOrCreateSettings(
+    settingsRepository: SettingsRepositoryContract,
+    userId: string,
+  ): Promise<UserSettings> {
+    const existing = await settingsRepository.findByUserId(userId);
+    if (existing) {
+      return existing;
+    }
+
+    return settingsRepository.save(
+      settingsRepository.create({
+        alarmSound: 'classic',
+        alarmVolume: 80,
+        backgroundSoundEnabled: false,
+        backgroundSoundType: null,
+        focusMinutes: 25,
+        longBreakInterval: 4,
+        longBreakMinutes: 15,
+        shortBreakMinutes: 5,
+        updatedBy: userId,
+        userId,
+      }),
+    );
   }
 }
