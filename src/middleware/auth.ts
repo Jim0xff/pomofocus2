@@ -47,14 +47,26 @@ function isTemplateEnvelope(
 }
 
 function extractSubject(claims: Record<string, unknown>): string | null {
-  const subject =
-    typeof claims.subject === 'string' && claims.subject.length > 0
-      ? claims.subject
-      : typeof claims.sub === 'string' && claims.sub.length > 0
-        ? claims.sub
-        : null;
+  if (typeof claims.subject === 'string' && claims.subject.length > 0) {
+    return claims.subject;
+  }
 
-  return subject;
+  if (typeof claims.sub === 'string' && claims.sub.length > 0) {
+    return claims.sub;
+  }
+
+  if (typeof claims.id === 'string' && claims.id.length > 0) {
+    return claims.id;
+  }
+
+  if (isRecord(claims.userInfo)) {
+    const userInfoId = claims.userInfo.id;
+    if (typeof userInfoId === 'string' && userInfoId.length > 0) {
+      return userInfoId;
+    }
+  }
+
+  return null;
 }
 
 function buildUser(token: string, payload: unknown): AuthenticatedUser {

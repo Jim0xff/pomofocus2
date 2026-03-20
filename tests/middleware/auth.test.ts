@@ -187,6 +187,28 @@ describe('auth middleware', () => {
     expect(next).toHaveBeenCalledWith();
   });
 
+  it('falls back to userInfo.id as subject for template-style payloads', async () => {
+    const req = createMockRequest({ authorization: 'Bearer upstream-token' });
+    const next = jest.fn();
+
+    global.fetch = jest.fn().mockResolvedValue({
+      json: jest.fn().mockResolvedValue({
+        code: 200,
+        data: {
+          userInfo: { id: 'user-from-userInfo', name: 'jim' },
+        },
+      }),
+      ok: true,
+      status: 200,
+    } as unknown as Response) as typeof fetch;
+
+    authMiddleware(req as never, {} as never, next);
+    await new Promise(process.nextTick);
+
+    expect((req as any).user?.subject).toBe('user-from-userInfo');
+    expect(next).toHaveBeenCalledWith();
+  });
+
   it('maps downstream exceptions to upstream auth errors', async () => {
     const req = createMockRequest({
       authorization: 'Bearer upstream-token',
