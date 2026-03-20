@@ -16,6 +16,7 @@ interface RawEnv {
   NODE_ENV?: string;
   PORT?: string;
   REDIS_URL?: string;
+  TASK_POINT_URL?: string;
 }
 
 export interface EnvConfig {
@@ -29,6 +30,7 @@ export interface EnvConfig {
   nodeEnv: string;
   port: number;
   redisUrl: string | null;
+  taskPointUrl: string | null;
 }
 
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on']);
@@ -74,6 +76,7 @@ export function loadEnv(source: RawEnv = process.env): EnvConfig {
     nodeEnv: source.NODE_ENV?.trim() || 'development',
     port: parsePort(source.PORT),
     redisUrl: source.REDIS_URL?.trim() || null,
+    taskPointUrl: source.TASK_POINT_URL?.trim() || null,
   };
 
   if (config.enableDbOnBoot && !config.databaseUrl) {
