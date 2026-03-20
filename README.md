@@ -41,3 +41,19 @@ The service exposes:
 - `POST /graphql`
 
 By default the app does not require PostgreSQL or Redis to be reachable on boot. Set `ENABLE_DB_ON_BOOT=true` and/or `ENABLE_REDIS_ON_BOOT=true` to validate those connections during startup.
+
+## Docker
+
+Build image:
+
+```bash
+docker build -t pomofocus2-backend:latest .
+```
+
+Run container:
+
+```bash
+docker run --rm -p 3000:3000 --env-file .env pomofocus2-backend:latest
+```
+
+Dockerfile uses a multi-stage build and installs only production npm packages in runtime image (`npm ci --omit=dev`).
