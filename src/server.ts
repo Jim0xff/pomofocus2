@@ -8,6 +8,7 @@ import { env } from './config/env';
 import { appDataSource } from './infra/database';
 import { getRedisClient } from './infra/redis';
 import { formatGraphQLError, resolvers, typeDefs, type GraphQLContext } from './graphql/schema';
+import { createServiceContainer } from './services';
 import { logger } from './shared/logger';
 
 async function initializeInfrastructure(): Promise<void> {
@@ -38,11 +39,15 @@ export async function bootstrap(): Promise<http.Server> {
   await initializeInfrastructure();
 
   const app = createApp();
+  const services = createServiceContainer({
+    dataSource: appDataSource,
+  });
   const apolloServer = new ApolloServer({
     typeDefs,
     resolvers,
     context: ({ req }: { req: Express.Request }): GraphQLContext => ({
       requestId: req.requestId,
+      services,
       user: req.user ?? null,
     }),
     formatError: formatGraphQLError,

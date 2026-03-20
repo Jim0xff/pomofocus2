@@ -13,11 +13,13 @@ describe('domain entity metadata', () => {
       (column) => column.propertyName === 'actualPomodoros',
     );
     const deletedAtColumn = taskColumns.find((column) => column.propertyName === 'deletedAt');
+    const completedAtColumn = taskColumns.find((column) => column.propertyName === 'completedAt');
     const taskCheck = storage.checks.find((check) => check.target === Task);
 
     expect(statusColumn?.options.default).toBe(TaskStatus.ACTIVE);
     expect(actualPomodorosColumn?.options.default).toBe(0);
     expect(deletedAtColumn?.options.nullable).toBe(true);
+    expect(completedAtColumn?.options.nullable).toBe(true);
     expect(taskCheck?.expression).toBe('"estimated_pomodoros" > 0');
   });
 

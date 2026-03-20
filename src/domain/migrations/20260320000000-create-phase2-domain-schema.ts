@@ -63,6 +63,11 @@ export class CreatePhase2DomainSchema20260320000000 implements MigrationInterfac
             isNullable: true,
           },
           {
+            name: 'completed_at',
+            type: 'timestamptz',
+            isNullable: true,
+          },
+          {
             name: 'created_at',
             type: 'timestamptz',
             default: 'now()',

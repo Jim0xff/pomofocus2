@@ -46,6 +46,9 @@ export class Task {
   @Column({ name: 'deleted_by', type: 'varchar', length: 64, nullable: true })
   deletedBy!: string | null;
 
+  @Column({ name: 'completed_at', type: 'timestamptz', nullable: true })
+  completedAt!: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 
