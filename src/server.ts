@@ -1,5 +1,6 @@
 import http from 'node:http';
 
+import type Express from 'express';
 import { ApolloServer } from 'apollo-server-express';
 
 import { createApp, registerFallbackHandlers } from './app';
@@ -37,10 +38,10 @@ export async function bootstrap(): Promise<http.Server> {
   await initializeInfrastructure();
 
   const app = createApp();
-  const apolloServer = new ApolloServer<GraphQLContext>({
+  const apolloServer = new ApolloServer({
     typeDefs,
     resolvers,
-    context: ({ req }) => ({
+    context: ({ req }: { req: Express.Request }): GraphQLContext => ({
       requestId: req.requestId,
       user: req.user ?? null,
     }),
@@ -49,7 +50,7 @@ export async function bootstrap(): Promise<http.Server> {
 
   await apolloServer.start();
   apolloServer.applyMiddleware({
-    app,
+    app: app as any,
     path: env.graphqlPath,
     cors: true,
   });

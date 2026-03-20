@@ -1,10 +1,11 @@
-import { DataSource, type DataSourceOptions } from 'typeorm';
+import { DataSource } from 'typeorm';
+import type { PostgresConnectionOptions } from 'typeorm/driver/postgres/PostgresConnectionOptions';
 
 import { env } from '../config/env';
 
 export function createDataSourceOptions(
-  overrides: Partial<DataSourceOptions> = {},
-): DataSourceOptions {
+  overrides: Partial<PostgresConnectionOptions> = {},
+): PostgresConnectionOptions {
   return {
     type: 'postgres',
     url: env.databaseUrl ?? undefined,

@@ -25,4 +25,4 @@ describe('app scaffold', () => {
     expect(response.body.code).toBe('NOT_FOUND');
     expect(typeof response.body.requestId).toBe('string');
   });
-}
+});
