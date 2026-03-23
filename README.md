@@ -1,5 +1,8 @@
 # Pomofocus2 Backend
 
+> Maintenance note: minor non-functional doc touch-up.
+> This commit does not change runtime behavior.
+
 Phase 1 scaffolds the backend GraphQL service and core infrastructure only. Domain business logic is intentionally deferred.
 
 ## Run
