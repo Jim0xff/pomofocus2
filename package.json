@@ -1,0 +1,37 @@
+{
+  "name": "hackathon-signup2-backend",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "compile": "tsc",
+    "start": "node dist/index.js",
+    "dev": "node --loader ts-node/esm src/index.ts",
+    "db:migrate:up": "psql \"$DATABASE_URL\" -f migrations/001_create_registrations.sql && psql \"$DATABASE_URL\" -f migrations/002_create_admin_users.sql && psql \"$DATABASE_URL\" -f migrations/003_create_admin_sessions.sql",
+    "db:migrate:down": "psql \"$DATABASE_URL\" -f migrations/004_rollback_all.sql",
+    "db:seed": "psql \"$DATABASE_URL\" -f seeds/001_admin_user.sql",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cls-rtracer": "^2.6.3",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.5",
+    "sql.js": "^1.14.1",
+    "typeorm": "^0.3.20",
+    "uuid": "^11.1.0",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.8.5",
+    "@types/supertest": "^7.2.0",
+    "pg-mem": "^3.0.14",
+    "supertest": "^7.2.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.2",
+    "vitest": "^4.1.2"
+  }
+}
