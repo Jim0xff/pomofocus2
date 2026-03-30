@@ -1,10 +1,11 @@
 import crypto from 'node:crypto';
-import { compare } from 'bcryptjs';
+import bcrypt from 'bcryptjs';
 import { AppDataSource } from '../infra/datasource.js';
 import { HttpError } from '../infra/HttpError.js';
 import { AdminUser } from '../models/AdminUser.js';
 import { AdminSession } from '../models/AdminSession.js';
 
+const { compare } = bcrypt;
 const userRepo = () => AppDataSource.getRepository(AdminUser);
 const sessionRepo = () => AppDataSource.getRepository(AdminSession);
 

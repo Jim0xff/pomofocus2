@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { compare } from 'bcryptjs';
+import bcrypt from 'bcryptjs';
 import { newDb } from 'pg-mem';
 
+const { compare } = bcrypt;
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 
 async function load(file: string) {
