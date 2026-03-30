@@ -1,6 +1,6 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, Unique, UpdateDateColumn } from 'typeorm';
 
-const IS_SQLJS = (process.env.DB_TYPE || '').toLowerCase() === 'sqljs';
+const IS_SQLJS = (process.env.DB_TYPE || '').toLowerCase() === 'sqljs' && !process.env.DATABASE_URL;
 const DATE_COLUMN_TYPE = IS_SQLJS ? 'datetime' : 'timestamp';
 const ID_COLUMN_TYPE = IS_SQLJS ? 'integer' : 'bigint';
 

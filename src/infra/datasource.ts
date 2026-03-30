@@ -9,8 +9,16 @@ const entities = [Registration, AdminUser, AdminSession];
 function normalizeDatabaseUrl(raw?: string) {
   const value = String(raw || '').trim();
   if (!value) return '';
-  const hit = value.match(/postgres(?:ql)?:\/\/[^\s"']+/i);
-  return hit?.[0] || '';
+  const hit = value.match(/postgres(?:ql)?:\/\/[^\s"']+/i)?.[0] || '';
+  if (!hit) return '';
+
+  try {
+    const u = new URL(hit);
+    u.searchParams.delete('sslmode');
+    return u.toString();
+  } catch {
+    return hit;
+  }
 }
 
 function normalizePem(raw?: string) {
@@ -28,9 +36,7 @@ function makeDataSource() {
     process.env.DB_HOST || process.env.DB_PORT || process.env.DB_USER || process.env.DB_PASSWORD || process.env.DB_NAME,
   );
 
-  const isTestRuntime = process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST);
-
-  if (isTestRuntime || ((!hasDatabaseUrl && dbType === 'sqljs') || (!hasDatabaseUrl && !hasPgParts))) {
+  if ((!hasDatabaseUrl && dbType === 'sqljs') || (!hasDatabaseUrl && !hasPgParts)) {
     return new DataSource({
       type: 'sqljs',
       autoSave: false,

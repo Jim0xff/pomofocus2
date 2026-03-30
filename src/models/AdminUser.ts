@@ -1,7 +1,7 @@
 import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, Unique, UpdateDateColumn, type Relation } from 'typeorm';
 import { AdminSession } from './AdminSession.js';
 
-const IS_SQLJS = (process.env.DB_TYPE || '').toLowerCase() === 'sqljs';
+const IS_SQLJS = (process.env.DB_TYPE || '').toLowerCase() === 'sqljs' && !process.env.DATABASE_URL;
 const DATE_COLUMN_TYPE = IS_SQLJS ? 'datetime' : 'timestamp';
 const ID_COLUMN_TYPE = IS_SQLJS ? 'integer' : 'bigint';
 

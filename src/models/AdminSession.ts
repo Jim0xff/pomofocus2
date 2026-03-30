@@ -1,7 +1,7 @@
 import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, Unique, type Relation } from 'typeorm';
 import { AdminUser } from './AdminUser.js';
 
-const IS_SQLJS = (process.env.DB_TYPE || '').toLowerCase() === 'sqljs';
+const IS_SQLJS = (process.env.DB_TYPE || '').toLowerCase() === 'sqljs' && !process.env.DATABASE_URL;
 const DATE_COLUMN_TYPE = IS_SQLJS ? 'datetime' : 'timestamp';
 const ID_COLUMN_TYPE = IS_SQLJS ? 'integer' : 'bigint';
 const FK_COLUMN_TYPE = IS_SQLJS ? 'integer' : 'bigint';
