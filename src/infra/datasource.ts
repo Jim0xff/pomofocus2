@@ -28,7 +28,9 @@ function makeDataSource() {
     process.env.DB_HOST || process.env.DB_PORT || process.env.DB_USER || process.env.DB_PASSWORD || process.env.DB_NAME,
   );
 
-  if ((!hasDatabaseUrl && dbType === 'sqljs') || (!hasDatabaseUrl && !hasPgParts)) {
+  const isTestRuntime = process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST);
+
+  if (isTestRuntime || ((!hasDatabaseUrl && dbType === 'sqljs') || (!hasDatabaseUrl && !hasPgParts))) {
     return new DataSource({
       type: 'sqljs',
       autoSave: false,
