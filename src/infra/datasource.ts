@@ -7,7 +7,13 @@ import { AdminSession } from '../models/AdminSession.js';
 const entities = [Registration, AdminUser, AdminSession];
 
 function makeDataSource() {
-  if ((process.env.DB_TYPE || '').toLowerCase() === 'sqljs') {
+  const dbType = (process.env.DB_TYPE || '').toLowerCase();
+  const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
+  const hasPgParts = Boolean(
+    process.env.DB_HOST || process.env.DB_PORT || process.env.DB_USER || process.env.DB_PASSWORD || process.env.DB_NAME,
+  );
+
+  if (dbType === 'sqljs' || (!hasDatabaseUrl && !hasPgParts)) {
     return new DataSource({
       type: 'sqljs',
       autoSave: false,
@@ -19,6 +25,7 @@ function makeDataSource() {
 
   return new DataSource({
     type: 'postgres',
+    url: process.env.DATABASE_URL,
     host: process.env.DB_HOST || '127.0.0.1',
     port: Number(process.env.DB_PORT || 5432),
     username: process.env.DB_USER || 'postgres',

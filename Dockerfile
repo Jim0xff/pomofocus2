@@ -25,4 +25,7 @@ RUN apt-get update && apt-get install -y \
 COPY . ./
 RUN npm install
 RUN npm run compile
+
+ENV DB_TYPE=sqljs
+
 CMD ["node", "./dist/index.js"]
