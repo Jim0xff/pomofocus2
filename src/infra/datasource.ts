@@ -23,9 +23,6 @@ function makeDataSource() {
     });
   }
 
-  const useSsl = String(process.env.DB_SSL || 'true').toLowerCase() !== 'false';
-  const rejectUnauthorized = String(process.env.DB_SSL_REJECT_UNAUTHORIZED || 'false').toLowerCase() === 'true';
-
   return new DataSource({
     type: 'postgres',
     url: process.env.DATABASE_URL,
@@ -34,7 +31,7 @@ function makeDataSource() {
     username: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || 'postgres',
     database: process.env.DB_NAME || 'hackathon_signup2',
-    ssl: useSsl ? { rejectUnauthorized } : false,
+    ssl: { rejectUnauthorized: false },
     entities,
     synchronize: false,
     logging: false,
