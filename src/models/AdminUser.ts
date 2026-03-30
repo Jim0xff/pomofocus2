@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, Unique, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, Unique, UpdateDateColumn, type Relation } from 'typeorm';
 import { AdminSession } from './AdminSession.js';
 
 const IS_SQLJS = (process.env.DB_TYPE || '').toLowerCase() === 'sqljs';
@@ -27,5 +27,5 @@ export class AdminUser {
   updatedAt!: Date;
 
   @OneToMany(() => AdminSession, (s) => s.adminUser)
-  sessions!: AdminSession[];
+  sessions!: Relation<AdminSession[]>;
 }

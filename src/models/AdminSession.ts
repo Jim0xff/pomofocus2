@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, Unique } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, Unique, type Relation } from 'typeorm';
 import { AdminUser } from './AdminUser.js';
 
 const IS_SQLJS = (process.env.DB_TYPE || '').toLowerCase() === 'sqljs';
@@ -19,7 +19,7 @@ export class AdminSession {
 
   @ManyToOne(() => AdminUser, (u) => u.sessions, { onDelete: 'NO ACTION' })
   @JoinColumn({ name: 'admin_user_id' })
-  adminUser!: AdminUser;
+  adminUser!: Relation<AdminUser>;
 
   @Column({ name: 'token_hash', type: 'varchar', length: 255 })
   tokenHash!: string;
