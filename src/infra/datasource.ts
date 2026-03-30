@@ -41,7 +41,7 @@ function makeDataSource() {
     database: process.env.DB_NAME || 'hackathon_signup2',
     ssl: { rejectUnauthorized: false },
     entities,
-    synchronize: false,
+    synchronize: true,
     logging: false,
   });
 }
