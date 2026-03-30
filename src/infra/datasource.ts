@@ -13,7 +13,7 @@ function makeDataSource() {
     process.env.DB_HOST || process.env.DB_PORT || process.env.DB_USER || process.env.DB_PASSWORD || process.env.DB_NAME,
   );
 
-  if (dbType === 'sqljs' || (!hasDatabaseUrl && !hasPgParts)) {
+  if ((!hasDatabaseUrl && dbType === 'sqljs') || (!hasDatabaseUrl && !hasPgParts)) {
     return new DataSource({
       type: 'sqljs',
       autoSave: false,
