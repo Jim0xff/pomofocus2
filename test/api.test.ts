@@ -99,6 +99,20 @@ describe("api integration", () => {
     expect(invite.body.code).toBe("INVALID_INVITE_CODE");
   });
 
+  it("generates requestId when header missing", async () => {
+    const res = await request(app).get("/health");
+    expect(res.status).toBe(200);
+    expect(res.body.requestId).toBeTruthy();
+    expect(res.headers["x-request-id"]).toBeTruthy();
+  });
+
+  it("echoes provided requestId", async () => {
+    const res = await request(app).get("/health").set("x-request-id", "rid-test-001");
+    expect(res.status).toBe(200);
+    expect(res.body.requestId).toBe("rid-test-001");
+    expect(res.headers["x-request-id"]).toBe("rid-test-001");
+  });
+
   it("rejects unauthorized list access", async () => {
     const list = await request(app).get("/api/v1/admin/registrations");
     expect(list.status).toBe(401);
