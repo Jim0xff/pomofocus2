@@ -1,0 +1,28 @@
+{
+  "name": "hackathon-signup3-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "migrate": "tsx scripts/migrate.ts",
+    "rollback": "tsx scripts/rollback.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.7.4",
+    "@types/pg": "^8.11.10",
+    "@types/supertest": "^6.0.2",
+    "pg-mem": "^3.0.5",
+    "supertest": "^7.0.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.1"
+  }
+}
