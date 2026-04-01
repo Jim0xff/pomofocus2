@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Check } from 'typeorm';
 
 @Entity('signups')
+@Check(`"team_size" > 0`)
 export class Signup {
   @PrimaryGeneratedColumn()
   id: number;
