@@ -1,44 +1,36 @@
 import { DataSource } from 'typeorm';
 import { DATABASE_URL, DATABASE_CA } from './constants.js';
-import { CoBuildAgent } from '../models/co_build_agent.js';
-import { TaskClaim } from '../models/task_claim.js';
-import { RemainToken } from '../models/remain_tokens.js';
-import { BudgetUsedRecord } from '../models/budget_used_record.js';
-import { Budget } from '../models/budget.js';
-import { RedPacketItem } from '../models/redpacket_item.js';
-import { RedPacket } from '../models/redpacket.js';
+import { Signup } from '../models/signup.js';
+import { AdminUser } from '../models/admin_user.js';
 
-// to avoid self signed certificate issue
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 let ds: DataSource = null;
 
 export function getRepository(name: any) {
-    return getDataSource().getRepository(name);
+  return getDataSource().getRepository(name);
 }
 
 export function getDataSource() {
-    if (ds) {
-        return ds;
-    }
+  if (ds) return ds;
 
-    ds = new DataSource({
-        type: 'postgres',
-        url: DATABASE_URL,
-        ssl: {
-            rejectUnauthorized: false,
-            ca: DATABASE_CA,
-        },
-        synchronize: true,
-        logging: process.env.LOG_SQL === 'true',
-        entities: [BudgetUsedRecord, Budget, RedPacketItem, RedPacket],
+  ds = new DataSource({
+    type: 'postgres',
+    url: DATABASE_URL,
+    ssl: DATABASE_CA
+      ? {
+          rejectUnauthorized: false,
+          ca: DATABASE_CA,
+        }
+      : false,
+    synchronize: true,
+    logging: process.env.LOG_SQL === 'true',
+    entities: [Signup, AdminUser],
+  });
 
-    });
-
-    return ds;
+  return ds;
 }
 
 export function initializeDatabase() {
-    const dataSource = getDataSource();
-    return dataSource.initialize();
+  return getDataSource().initialize();
 }

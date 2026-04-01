@@ -163,3 +163,8 @@ export const RARITY_NAMES = {
 };
 
 export const MEMORY_UNIT_QUOTA = [10, 20, 30, 50]
+
+export const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+export const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || SECRET_KEY || 'hackathon-signup-secret';
+export const ADMIN_TOKEN_EXPIRES_IN = Number(process.env.ADMIN_TOKEN_EXPIRES_IN || '7200');
