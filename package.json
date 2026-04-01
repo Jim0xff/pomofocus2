@@ -5,6 +5,8 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
+    "selftest": "node scripts/selftest.js",
+    "check": "npm run selftest && npm test",
     "test": "node --test"
   },
   "keywords": [],

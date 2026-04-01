@@ -1,5 +1,9 @@
 const express = require('express');
-const { AppError, sendError } = require('./errors');
+const { AppError } = require('./errors');
+const { createLogger } = require('./infra/logger');
+const { createErrorHandler } = require('./middleware/error-handler');
+const { notFoundHandler } = require('./middleware/not-found');
+const { createRequestContextMiddleware } = require('./middleware/request-context');
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^[+]?[0-9()\-\s]{6,32}$/;
@@ -144,10 +148,12 @@ function requireAdminToken(adminToken) {
   };
 }
 
-function createApp({ signupRepository, adminToken = 'dev-admin-token' }) {
+function createApp({ signupRepository, adminToken = 'dev-admin-token', logger } = {}) {
   const app = express();
+  const appLogger = logger && typeof logger.child === 'function' ? logger : createLogger();
 
   app.use(express.json());
+  app.use(createRequestContextMiddleware(appLogger));
 
   app.get('/health', (_req, res) => {
     res.json({ success: true, data: { status: 'ok' } });
@@ -228,17 +234,8 @@ function createApp({ signupRepository, adminToken = 'dev-admin-token' }) {
     }
   });
 
-  app.use((req, _res, next) => {
-    next(new AppError(404, 'NOT_FOUND', `Route ${req.method} ${req.originalUrl} not found.`));
-  });
-
-  app.use((error, req, res, _next) => {
-    if (!error.status) {
-      console.error(error);
-    }
-
-    return sendError(res, error);
-  });
+  app.use(notFoundHandler);
+  app.use(createErrorHandler(appLogger));
 
   return app;
 }

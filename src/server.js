@@ -1,18 +1,25 @@
 const { createApp } = require('./app');
-const config = require('./config');
 const { createDatabaseConnection, createSignupRepository } = require('./db');
+const { loadConfig } = require('./infra/config-loader');
+const { createLogger } = require('./infra/logger');
 
+const config = loadConfig();
+const logger = createLogger();
 const db = createDatabaseConnection(config.dbPath);
 const signupRepository = createSignupRepository(db);
-const app = createApp({ signupRepository, adminToken: config.adminToken });
+const app = createApp({ signupRepository, adminToken: config.adminToken, logger });
 
 const server = app.listen(config.port, () => {
-  console.log(`Listening on port ${config.port}`);
+  logger.info(`Listening on port ${config.port}`, {
+    port: config.port,
+    dbPath: config.dbPath,
+  });
 });
 
 function shutdown() {
   server.close(() => {
     db.close();
+    logger.info('Server shutdown complete');
   });
 }
 
