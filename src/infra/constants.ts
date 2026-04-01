@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { createPublicKey } from 'crypto';
+import { createPublicKey, generateKeyPairSync } from 'crypto';
 import { ContractConfig } from 'alith/lazai';
 import { AdventureType } from './types.js';
 
@@ -98,7 +98,19 @@ export const CONTRACT_CONFIG = new ContractConfig(
     SETTLEMENT_ADDRESS,
 );
 
-export const RSA_PRIVATE_KEY = Buffer.from(process.env.RSA_PRIVATE_KEY, 'base64').toString('utf-8');
+const decodedRsaPrivateKey = process.env.RSA_PRIVATE_KEY
+    ? Buffer.from(process.env.RSA_PRIVATE_KEY, 'base64').toString('utf-8')
+    : '';
+
+const generatedRsaKeyPair = decodedRsaPrivateKey
+    ? null
+    : generateKeyPairSync('rsa', {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: 'pkcs1', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs1', format: 'pem' },
+    });
+
+export const RSA_PRIVATE_KEY = decodedRsaPrivateKey || generatedRsaKeyPair.privateKey;
 export const RSA_PUBLIC_KEY = createPublicKey({
     key: RSA_PRIVATE_KEY,
     format: 'pem',
