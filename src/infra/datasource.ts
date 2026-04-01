@@ -1,4 +1,5 @@
 import { DataSource } from 'typeorm';
+import { newDb, DataType } from 'pg-mem';
 import { DATABASE_URL, DATABASE_CA } from './constants.js';
 import { Signup } from '../models/signup.js';
 import { AdminUser } from '../models/admin_user.js';
@@ -13,6 +14,19 @@ export function getRepository(name: any) {
 
 export function getDataSource() {
   if (ds) return ds;
+
+  if (process.env.USE_PGMEM === 'true') {
+    const mem = newDb({ autoCreateForeignKeyIndices: true });
+    mem.public.registerFunction({ name: 'version', returns: DataType.text, implementation: () => 'pg-mem' });
+    mem.public.registerFunction({ name: 'current_database', returns: DataType.text, implementation: () => 'pgmem' });
+    ds = mem.adapters.createTypeormDataSource({
+      type: 'postgres',
+      synchronize: true,
+      logging: process.env.LOG_SQL === 'true',
+      entities: [Signup, AdminUser],
+    });
+    return ds;
+  }
 
   ds = new DataSource({
     type: 'postgres',
