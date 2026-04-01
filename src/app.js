@@ -148,10 +148,23 @@ function requireAdminToken(adminToken) {
   };
 }
 
+function allowAllCors(req, res, next) {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type,x-admin-token,Authorization');
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+
+  return next();
+}
+
 function createApp({ signupRepository, adminToken = 'dev-admin-token', logger } = {}) {
   const app = express();
   const appLogger = logger && typeof logger.child === 'function' ? logger : createLogger();
 
+  app.use(allowAllCors);
   app.use(express.json());
   app.use(createRequestContextMiddleware(appLogger));
 
