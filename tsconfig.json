@@ -1,0 +1,32 @@
+{
+    "compilerOptions": {
+        "rootDirs": [
+            "src"
+        ],
+        "outDir": "dist",
+        "lib": [
+            "es2020",
+            "dom"
+        ],
+        "target": "es2020",
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "esModuleInterop": true,
+        "resolveJsonModule": true,
+        "types": [
+            "node"
+        ],
+        "sourceMap": true,
+        "inlineSources": true,
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
+        // Set `sourceRoot` to  "/" to strip the build path prefix
+        // from generated source code references.
+        // This improves issue grouping in Sentry.
+        "sourceRoot": "/"
+    },
+    "include": [
+        "src/**/*",
+        "src/**/*.json",
+    ],
+}
