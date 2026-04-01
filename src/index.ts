@@ -102,8 +102,31 @@ app.post('/api/admin/login', async (req, res) => {
   });
 });
 
-app.get('/api/admin/signups', requireAdminAuth, async (_req, res) => {
-  return fail(res, 'NOT_IMPLEMENTED', 'Implemented in next phase', 501);
+app.get('/api/admin/signups', requireAdminAuth, async (req, res) => {
+  const page = Math.max(1, Number(req.query.page || 1));
+  const page_size = Math.min(100, Math.max(1, Number(req.query.page_size || 20)));
+
+  const repo = getRepository(Signup);
+  const [items, total] = await repo.findAndCount({
+    order: { created_at: 'DESC' },
+    skip: (page - 1) * page_size,
+    take: page_size,
+  });
+
+  return ok(res, {
+    items: items.map((x) => ({
+      id: x.id,
+      name: x.name,
+      team_size: x.team_size,
+      email: x.email,
+      created_at: x.created_at,
+    })),
+    pagination: {
+      page,
+      page_size,
+      total,
+    },
+  });
 });
 
 await initializeDatabase();
