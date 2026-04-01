@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Check, Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
 @Entity({ name: 'signup' })
+@Check('"teamSize" >= 1')
 export class Signup {
   @PrimaryGeneratedColumn('increment', { type: 'bigint' })
   id!: string;

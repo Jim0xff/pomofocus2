@@ -3,6 +3,38 @@ import { newDb } from 'pg-mem';
 import { Signup } from '../src/models/Signup.js';
 
 describe('OBL-03 DB integration evidence', () => {
+  it('enforces DB check constraint teamSize >= 1', async () => {
+    const db = newDb({ autoCreateForeignKeyIndices: true });
+    db.public.registerFunction({ name: 'version', returns: 'text' as any, implementation: () => '14.2' });
+    db.public.registerFunction({
+      name: 'current_database',
+      returns: 'text' as any,
+      implementation: () => 'pg_mem',
+    });
+
+    const ds = await db.adapters.createTypeormDataSource({
+      type: 'postgres',
+      entities: [Signup],
+      synchronize: true,
+    } as any);
+
+    await ds.initialize();
+    const repo = ds.getRepository(Signup);
+
+    await expect(
+      repo.save(
+        repo.create({
+          name: 'Invalid',
+          email: 'invalid@example.com',
+          teamSize: 0,
+          submittedAt: new Date('2026-04-01T09:00:00.000Z'),
+        }),
+      ),
+    ).rejects.toBeTruthy();
+
+    await ds.destroy();
+  });
+
   it('persists and reads signup records with submittedAt ordering', async () => {
     const db = newDb({ autoCreateForeignKeyIndices: true });
     db.public.registerFunction({ name: 'version', returns: 'text' as any, implementation: () => '14.2' });
