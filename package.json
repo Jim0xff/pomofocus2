@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "load:test": "node scripts/run-load-test",
+    "load:test:baseline": "node scripts/run-load-test --profile=local-baseline",
+    "load:test:full": "node scripts/run-load-test --profile=full"
   }
 }

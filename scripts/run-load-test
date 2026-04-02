@@ -1,0 +1,264 @@
+import { randomUUID } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
+
+import { stageTargets, summarizeScenario } from '../src/load-test.js';
+
+const profiles = Object.freeze({
+  full: {
+    name: 'full',
+    stages: [
+      { durationSeconds: 20, targetConcurrency: null },
+      { durationSeconds: 120, targetConcurrency: null },
+      { durationSeconds: 20, targetConcurrency: 0 },
+    ],
+  },
+  'local-baseline': {
+    name: 'local-baseline',
+    stages: [
+      { durationSeconds: 3, targetConcurrency: null },
+      { durationSeconds: 6, targetConcurrency: null },
+      { durationSeconds: 3, targetConcurrency: 0 },
+    ],
+  },
+});
+
+function parseArgs(argv) {
+  const options = {};
+
+  for (const argument of argv) {
+    if (!argument.startsWith('--')) {
+      continue;
+    }
+
+    const [key, value] = argument.slice(2).split('=');
+    options[key] = value ?? 'true';
+  }
+
+  return options;
+}
+
+function cloneStages(profileName, targetConcurrency) {
+  const profile = profiles[profileName];
+  if (!profile) {
+    throw new Error(`Unknown profile: ${profileName}`);
+  }
+
+  return profile.stages.map((stage, index) => ({
+    durationSeconds: stage.durationSeconds,
+    targetConcurrency:
+      stage.targetConcurrency === null && index < 2 ? targetConcurrency : stage.targetConcurrency,
+  }));
+}
+
+function buildSubmitRequest(baseUrl) {
+  const uniqueToken = randomUUID();
+
+  return {
+    url: `${baseUrl}/api/v1/responses`,
+    init: {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        answers: [
+          { question_id: 'q_name', answer_text: `load-${uniqueToken}` },
+          { question_id: 'q_feedback', answer_text: `baseline-${uniqueToken}` },
+        ],
+      }),
+    },
+  };
+}
+
+function buildAdminListRequest(baseUrl, adminToken) {
+  return {
+    url: `${baseUrl}/api/v1/admin/responses?page=1&page_size=20`,
+    init: {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+      },
+    },
+  };
+}
+
+function countResponseRows(databasePath) {
+  const database = new DatabaseSync(databasePath, { readOnly: true });
+
+  try {
+    return database.prepare('SELECT COUNT(*) AS count FROM survey_response').get().count;
+  } finally {
+    database.close();
+  }
+}
+
+async function makeRequest(buildRequest) {
+  const startedAt = performance.now();
+
+  try {
+    const request = buildRequest();
+    const response = await fetch(request.url, request.init);
+
+    return {
+      latencyMs: Math.round(performance.now() - startedAt),
+      statusCode: response.status,
+    };
+  } catch (error) {
+    return {
+      latencyMs: Math.round(performance.now() - startedAt),
+      statusCode: null,
+      error,
+    };
+  }
+}
+
+async function runScenario({
+  name,
+  baseUrl,
+  adminToken,
+  databasePath,
+  targetConcurrency,
+  stages,
+}) {
+  const timeline = stageTargets(stages);
+  const workers = [];
+  const results = [];
+  let activeWorkers = 0;
+  let startedRequests = 0;
+  let timelineIndex = 0;
+
+  const dbRowsBefore = name === 'submit' ? countResponseRows(databasePath) : null;
+  const buildRequest = name === 'submit'
+    ? () => buildSubmitRequest(baseUrl)
+    : () => buildAdminListRequest(baseUrl, adminToken);
+
+  async function workerLoop(workerState) {
+    while (!workerState.stop) {
+      activeWorkers += 1;
+      startedRequests += 1;
+      const result = await makeRequest(buildRequest);
+      results.push(result);
+      activeWorkers -= 1;
+    }
+  }
+
+  function reconcileWorkers(desiredConcurrency) {
+    while (workers.length < desiredConcurrency) {
+      const workerState = { stop: false };
+      workers.push(workerState);
+      workerLoop(workerState);
+    }
+
+    while (workers.length > desiredConcurrency) {
+      const workerState = workers.pop();
+      workerState.stop = true;
+    }
+  }
+
+  await new Promise((resolve) => {
+    const timer = setInterval(() => {
+      if (timelineIndex >= timeline.length) {
+        clearInterval(timer);
+        reconcileWorkers(0);
+        resolve();
+        return;
+      }
+
+      reconcileWorkers(timeline[timelineIndex].targetConcurrency);
+      timelineIndex += 1;
+    }, 1000);
+  });
+
+  while (activeWorkers > 0) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  const completedRequests = results.length;
+  const successStatuses = name === 'submit' ? new Set([201]) : new Set([200]);
+  const successCount = results.filter((result) => successStatuses.has(result.statusCode)).length;
+  const unexpected5xxCount = results.filter(
+    (result) => result.statusCode !== null && result.statusCode >= 500,
+  ).length;
+  const errorCount = results.filter((result) => result.statusCode === null).length;
+  const latenciesMs = results.map((result) => result.latencyMs);
+  const statusCounts = {};
+
+  for (const result of results) {
+    const key = result.statusCode === null ? 'fetch_error' : String(result.statusCode);
+    statusCounts[key] = (statusCounts[key] || 0) + 1;
+  }
+
+  const dbRowsAfter = name === 'submit' ? countResponseRows(databasePath) : null;
+
+  return summarizeScenario({
+    name,
+    targetConcurrency,
+    stages,
+    startedRequests,
+    completedRequests,
+    successCount,
+    unexpected5xxCount,
+    errorCount,
+    latenciesMs,
+    statusCounts,
+    dbRowsBefore,
+    dbRowsAfter,
+  });
+}
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  const profileName = args.profile || process.env.LOAD_TEST_PROFILE || 'local-baseline';
+  const baseUrl = args.baseUrl || process.env.LOAD_TEST_BASE_URL || 'http://127.0.0.1:3000';
+  const databasePath = args.dbPath || process.env.LOAD_TEST_DB_PATH || process.env.SURVEY_DB_PATH;
+  const adminToken = args.adminToken || process.env.LOAD_TEST_ADMIN_TOKEN || process.env.ADMIN_API_TOKEN;
+
+  if (!databasePath) {
+    throw new Error('LOAD_TEST_DB_PATH or SURVEY_DB_PATH is required');
+  }
+
+  if (!adminToken) {
+    throw new Error('LOAD_TEST_ADMIN_TOKEN or ADMIN_API_TOKEN is required');
+  }
+
+  const scenarios = [
+    {
+      name: 'submit',
+      targetConcurrency: 100,
+      stages: cloneStages(profileName, 100),
+    },
+    {
+      name: 'admin_list',
+      targetConcurrency: 50,
+      stages: cloneStages(profileName, 50),
+    },
+  ];
+
+  const output = {
+    profile: profileName,
+    runStartedAt: new Date().toISOString(),
+    baseUrl,
+    databasePath,
+    scenarios: [],
+  };
+
+  for (const scenario of scenarios) {
+    output.scenarios.push(
+      await runScenario({
+        name: scenario.name,
+        baseUrl,
+        adminToken,
+        databasePath,
+        targetConcurrency: scenario.targetConcurrency,
+        stages: scenario.stages,
+      }),
+    );
+  }
+
+  process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+}
+
+main().catch((error) => {
+  process.stderr.write(`${error.stack}\n`);
+  process.exitCode = 1;
+});
