@@ -1,6 +1,9 @@
 import { AppError } from './errors.js';
 
 const MAX_ANSWER_LENGTH = 5000;
+const DEFAULT_PAGE = 1;
+const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 100;
 
 export function validateSubmission(answers, questions) {
   if (!Array.isArray(answers) || answers.length === 0) {
@@ -62,4 +65,36 @@ export function validateSubmission(answers, questions) {
     question_id: answer.question_id,
     answer_text: answer.answer_text,
   }));
+}
+
+export function validatePaging(searchParams) {
+  const pageRaw = searchParams.get('page');
+  const pageSizeRaw = searchParams.get('page_size');
+  const page = pageRaw === null ? DEFAULT_PAGE : Number(pageRaw);
+  const pageSize = pageSizeRaw === null ? DEFAULT_PAGE_SIZE : Number(pageSizeRaw);
+
+  if (!Number.isInteger(page) || page < 1) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'page must be an integer greater than or equal to 1');
+  }
+
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > MAX_PAGE_SIZE) {
+    throw new AppError(
+      400,
+      'VALIDATION_ERROR',
+      `page_size must be an integer between 1 and ${MAX_PAGE_SIZE}`,
+    );
+  }
+
+  return {
+    page,
+    page_size: pageSize,
+  };
+}
+
+export function validateResponseId(responseId) {
+  if (typeof responseId !== 'string' || responseId.length === 0 || responseId.length > 36) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'response_id is invalid');
+  }
+
+  return responseId;
 }

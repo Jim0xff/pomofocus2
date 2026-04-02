@@ -19,6 +19,26 @@ export function createResponseRepository(database) {
     FROM survey_response_answer
   `);
 
+  const listResponsesStatement = database.prepare(`
+    SELECT response_id, submitted_at
+    FROM survey_response
+    ORDER BY submitted_at DESC, response_id DESC
+    LIMIT ? OFFSET ?
+  `);
+
+  const getResponseStatement = database.prepare(`
+    SELECT response_id, submitted_at
+    FROM survey_response
+    WHERE response_id = ?
+  `);
+
+  const getResponseAnswersStatement = database.prepare(`
+    SELECT question_id, answer_text
+    FROM survey_response_answer
+    WHERE response_id = ?
+    ORDER BY question_id ASC
+  `);
+
   function saveResponse(response) {
     database.exec('BEGIN');
 
@@ -44,9 +64,42 @@ export function createResponseRepository(database) {
     return countAnswersStatement.get().count;
   }
 
+  function listResponses({ page, page_size }) {
+    const total = countResponsesStatement.get().count;
+    const offset = (page - 1) * page_size;
+    const items = listResponsesStatement
+      .all(page_size, offset)
+      .map((row) => ({ ...row }));
+
+    return {
+      items,
+      page,
+      page_size,
+      total,
+    };
+  }
+
+  function getResponseDetail(responseId) {
+    const response = getResponseStatement.get(responseId);
+    if (!response) {
+      return null;
+    }
+
+    const answers = getResponseAnswersStatement
+      .all(responseId)
+      .map((row) => ({ ...row }));
+
+    return {
+      ...response,
+      answers,
+    };
+  }
+
   return {
     saveResponse,
     countResponses,
     countAnswers,
+    listResponses,
+    getResponseDetail,
   };
 }

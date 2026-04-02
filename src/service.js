@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
+import { AppError } from './errors.js';
 import { getFixedSurvey } from './survey.js';
-import { validateSubmission } from './validation.js';
+import { validateResponseId, validateSubmission } from './validation.js';
 
 export function createSurveyService(repository) {
   function getSurvey() {
@@ -29,8 +30,36 @@ export function createSurveyService(repository) {
     };
   }
 
+  function listResponses(query) {
+    return repository.listResponses(query);
+  }
+
+  function getResponseDetail(responseId) {
+    const validResponseId = validateResponseId(responseId);
+    const detail = repository.getResponseDetail(validResponseId);
+
+    if (!detail) {
+      throw new AppError(404, 'NOT_FOUND', `response ${validResponseId} was not found`);
+    }
+
+    const answerMap = new Map(
+      detail.answers.map((answer) => [answer.question_id, answer.answer_text]),
+    );
+
+    return {
+      response_id: detail.response_id,
+      submitted_at: detail.submitted_at,
+      answers: getFixedSurvey().map((question) => ({
+        ...question,
+        answer_text: answerMap.get(question.question_id) ?? '',
+      })),
+    };
+  }
+
   return {
     getSurvey,
     submitResponse,
+    listResponses,
+    getResponseDetail,
   };
 }
