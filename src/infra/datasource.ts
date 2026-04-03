@@ -8,10 +8,15 @@ const pgSslNoVerify = process.env.PGSSL_NO_VERIFY === "true";
 const sslModeRequire = /sslmode=require/i.test(databaseUrl ?? "");
 const useInsecureSsl = pgSslNoVerify || sslModeRequire;
 
+if (useInsecureSsl) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+
 export const appDataSource = new DataSource({
   type: "postgres",
   url: databaseUrl,
   ssl: useInsecureSsl ? { rejectUnauthorized: false } : undefined,
+  extra: useInsecureSsl ? { ssl: { rejectUnauthorized: false } } : undefined,
   synchronize: false,
   logging: false,
   entities: [SurveySubmission],
