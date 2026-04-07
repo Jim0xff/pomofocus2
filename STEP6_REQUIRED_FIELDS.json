@@ -1,0 +1,9 @@
+{
+  "current_phase": "phase_3",
+  "AOL": ["OBL-01", "OBL-02", "OBL-03", "OBL-04", "OBL-05"],
+  "POS": {"OBL-01": "done", "OBL-02": "done", "OBL-03": "done", "OBL-04": "done", "OBL-05": "done"},
+  "CTE": "build+test pass",
+  "ACR": "all pass",
+  "TPO": "all pass",
+  "DON": "sqljs deviation documented"
+}
