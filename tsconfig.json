@@ -13,5 +13,5 @@
     "inlineSources": true,
     "sourceRoot": "/"
   },
-  "include": ["src/index.ts", "src/survey_store.ts"]
+  "include": ["src/index.ts", "src/survey_store.ts", "src/services/submission_repository.ts"]
 }

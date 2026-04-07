@@ -1,19 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import { randomUUID } from 'crypto';
-import {
-  FIXED_QUESTIONNAIRE_ID,
-  addSubmission,
-  fixedQuestionnaire,
-  getSubmission,
-  listSubmissions,
-  nextResponseId,
-  type SurveyAnswer,
-} from './survey_store.js';
+import { fixedQuestionnaire, FIXED_QUESTIONNAIRE_ID, nextResponseId, type SurveyAnswer } from './survey_store.js';
+import { SubmissionRepository } from './services/submission_repository.js';
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
 const adminToken = process.env.ADMIN_TOKEN || 'dev-admin-token';
+const repository = new SubmissionRepository(process.env.DATABASE_URL);
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
@@ -51,7 +45,7 @@ app.get('/api/questionnaires/fixed', (_req, res) => {
   });
 });
 
-app.post('/api/submissions', (req, res) => {
+app.post('/api/submissions', async (req, res) => {
   const requestId = (req as any).requestId as string;
   const { questionnaire_id, answers } = req.body || {};
 
@@ -62,8 +56,8 @@ app.post('/api/submissions', (req, res) => {
     return res.status(400).json(errorBody('INVALID_ARGUMENT', 'answers must be array', requestId));
   }
 
-  const normalized = answers as SurveyAnswer[];
-  const answerMap = new Map(normalized.map((a) => [a.questionId || (a as any).question_id, a.value]));
+  const normalized = (answers as any[]).map((a) => ({ questionId: a.questionId || a.question_id, value: String(a.value ?? '') })) as SurveyAnswer[];
+  const answerMap = new Map(normalized.map((a) => [a.questionId, a.value]));
 
   for (const q of fixedQuestionnaire.questions) {
     const hasQuestion = answerMap.has(q.questionId);
@@ -75,32 +69,32 @@ app.post('/api/submissions', (req, res) => {
   }
 
   for (const item of normalized) {
-    const qid = item.questionId || (item as any).question_id;
-    if (!fixedQuestionnaire.questions.find((q) => q.questionId === qid)) {
-      return res.status(400).json(errorBody('QUESTION_NOT_FOUND', `Question ${qid} not found`, requestId, { question_id: qid }));
+    if (!fixedQuestionnaire.questions.find((q) => q.questionId === item.questionId)) {
+      return res
+        .status(400)
+        .json(errorBody('QUESTION_NOT_FOUND', `Question ${item.questionId} not found`, requestId, { question_id: item.questionId }));
     }
   }
 
-  const submittedAt = new Date().toISOString();
-  const responseId = nextResponseId();
-  const record = addSubmission({
-    responseId,
-    questionnaireId: FIXED_QUESTIONNAIRE_ID,
-    submittedAt,
-    answers: normalized.map((a: any) => ({ questionId: a.questionId || a.question_id, value: String(a.value ?? '') })),
-  });
+  try {
+    const submittedAt = new Date().toISOString();
+    const responseId = nextResponseId();
+    const record = await repository.addSubmission(responseId, submittedAt, normalized);
 
-  return res.status(201).json({
-    response_id: record.responseId,
-    questionnaire_id: record.questionnaireId,
-    submitted_at: record.submittedAt,
-    answers: record.answers.map((a) => ({ question_id: a.questionId, value: a.value })),
-  });
+    return res.status(201).json({
+      response_id: record.responseId,
+      questionnaire_id: record.questionnaireId,
+      submitted_at: record.submittedAt,
+      answers: record.answers.map((a) => ({ question_id: a.questionId, value: a.value })),
+    });
+  } catch (error) {
+    return res.status(500).json(errorBody('INTERNAL_ERROR', 'Unexpected server error', requestId));
+  }
 });
 
-app.get('/api/admin/submissions', (req, res) => {
+app.get('/api/admin/submissions', async (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const data = listSubmissions();
+  const data = await repository.listSubmissions();
   res.json({
     items: data.map((s) => ({ response_id: s.responseId, submitted_at: s.submittedAt })),
     page: 1,
@@ -109,10 +103,10 @@ app.get('/api/admin/submissions', (req, res) => {
   });
 });
 
-app.get('/api/admin/submissions/:response_id', (req, res) => {
+app.get('/api/admin/submissions/:response_id', async (req, res) => {
   if (!requireAdmin(req, res)) return;
   const requestId = (req as any).requestId as string;
-  const found = getSubmission(req.params.response_id);
+  const found = await repository.getSubmission(req.params.response_id);
   if (!found) {
     return res.status(404).json(errorBody('RESPONSE_NOT_FOUND', `Response ${req.params.response_id} not found`, requestId, { response_id: req.params.response_id }));
   }
@@ -124,6 +118,14 @@ app.get('/api/admin/submissions/:response_id', (req, res) => {
   });
 });
 
-app.listen(port, () => {
-  console.log(`survey backend ready at http://localhost:${port}`);
+async function bootstrap() {
+  await repository.init();
+  app.listen(port, () => {
+    console.log(`survey backend ready at http://localhost:${port}`);
+  });
+}
+
+bootstrap().catch((err) => {
+  console.error('bootstrap failed', err);
+  process.exit(1);
 });
