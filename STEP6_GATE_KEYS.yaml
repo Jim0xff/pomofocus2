@@ -1,0 +1,11 @@
+current_phase: phase_3
+AOL: [OBL-01, OBL-02, OBL-03, OBL-04, OBL-05]
+POS:
+  OBL-01: done
+  OBL-02: done
+  OBL-03: done
+  OBL-04: done
+  OBL-05: done
+CAE: true
+template_rule_closure: satisfied
+sqljs_deviation_trace: repo/IMPLEMENTATION_NOTES.md
