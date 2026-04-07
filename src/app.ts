@@ -38,6 +38,12 @@ export function createApp() {
     try { res.json({ data: await getResponseDetail(req.params.response_id) }); } catch (e) { next(e); }
   });
 
+  if (process.env.NODE_ENV === 'test') {
+    app.get('/api/__test__/panic', (_req, _res, next) => {
+      next(new Error('panic-for-500-test'));
+    });
+  }
+
   app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const requestId = (req as any).requestId || randomUUID();
     if (err instanceof AppError) {

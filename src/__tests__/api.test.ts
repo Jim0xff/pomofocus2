@@ -68,3 +68,9 @@ test('invalid page_size returns INVALID_REQUEST', async () => {
   const res = await request(app).get('/api/admin/responses?page=1&page_size=101').expect(400);
   assert.equal(res.body.error.code, 'INVALID_REQUEST');
 });
+
+test('internal 500 envelope includes requestId', async () => {
+  const res = await request(app).get('/api/__test__/panic').expect(500);
+  assert.equal(res.body.error.code, 'INTERNAL_ERROR');
+  assert.ok(res.body.error.requestId);
+});
