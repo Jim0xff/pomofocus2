@@ -19,7 +19,11 @@ export class SubmissionRepository {
 
   constructor(private readonly databaseUrl?: string) {
     if (databaseUrl) {
-      this.pool = new Pool({ connectionString: databaseUrl });
+      const useSsl = databaseUrl.includes('sslmode=require');
+      this.pool = new Pool({
+        connectionString: databaseUrl,
+        ssl: useSsl ? { rejectUnauthorized: false } : undefined,
+      });
     }
   }
 
@@ -27,34 +31,34 @@ export class SubmissionRepository {
     if (!this.pool) return;
 
     await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS survey_response (
+      CREATE TABLE IF NOT EXISTS "surveyResponse" (
         id BIGSERIAL PRIMARY KEY,
-        responseId VARCHAR(64) NOT NULL UNIQUE,
-        questionnaireId VARCHAR(64) NOT NULL,
-        submittedAt TIMESTAMPTZ NOT NULL,
+        "responseId" VARCHAR(64) NOT NULL UNIQUE,
+        "questionnaireId" VARCHAR(64) NOT NULL,
+        "submittedAt" TIMESTAMPTZ NOT NULL,
         status VARCHAR(32) NOT NULL DEFAULT 'active',
-        createdAt TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updatedAt TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
     await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS survey_response_answer (
+      CREATE TABLE IF NOT EXISTS "surveyResponseAnswer" (
         id BIGSERIAL PRIMARY KEY,
-        responseId VARCHAR(64) NOT NULL,
-        questionId VARCHAR(64) NOT NULL,
+        "responseId" VARCHAR(64) NOT NULL,
+        "questionId" VARCHAR(64) NOT NULL,
         value TEXT NOT NULL,
-        createdAt TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updatedAt TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT uqSurveyResponseAnswerResponseQuestion UNIQUE(responseId, questionId),
-        CONSTRAINT fkSurveyResponseAnswerResponseId FOREIGN KEY(responseId) REFERENCES survey_response(responseId)
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "uqSurveyResponseAnswerResponseQuestion" UNIQUE("responseId", "questionId"),
+        CONSTRAINT "fkSurveyResponseAnswerResponseId" FOREIGN KEY("responseId") REFERENCES "surveyResponse"("responseId")
       );
     `);
 
-    await this.pool.query(`CREATE INDEX IF NOT EXISTS idxSurveyResponseSubmittedAt ON survey_response(submittedAt DESC);`);
-    await this.pool.query(`CREATE INDEX IF NOT EXISTS idxSurveyResponseQuestionnaireSubmittedAt ON survey_response(questionnaireId, submittedAt DESC);`);
-    await this.pool.query(`CREATE INDEX IF NOT EXISTS idxSurveyResponseAnswerResponseId ON survey_response_answer(responseId);`);
-    await this.pool.query(`CREATE INDEX IF NOT EXISTS idxSurveyResponseAnswerQuestionId ON survey_response_answer(questionId);`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idxSurveyResponseSubmittedAt" ON "surveyResponse"("submittedAt" DESC);`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idxSurveyResponseQuestionnaireSubmittedAt" ON "surveyResponse"("questionnaireId", "submittedAt" DESC);`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idxSurveyResponseAnswerResponseId" ON "surveyResponseAnswer"("responseId");`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idxSurveyResponseAnswerQuestionId" ON "surveyResponseAnswer"("questionId");`);
   }
 
   async addSubmission(responseId: string, submittedAt: string, answers: SurveyAnswer[]): Promise<SurveySubmission> {
@@ -73,12 +77,12 @@ export class SubmissionRepository {
     try {
       await client.query('BEGIN');
       await client.query(
-        `INSERT INTO survey_response(responseId, questionnaireId, submittedAt, status) VALUES($1,$2,$3,$4)`,
+        `INSERT INTO "surveyResponse"("responseId", "questionnaireId", "submittedAt", status) VALUES($1,$2,$3,$4)`,
         [responseId, FIXED_QUESTIONNAIRE_ID, submittedAt, 'active']
       );
       for (const answer of answers) {
         await client.query(
-          `INSERT INTO survey_response_answer(responseId, questionId, value) VALUES($1,$2,$3)`,
+          `INSERT INTO "surveyResponseAnswer"("responseId", "questionId", value) VALUES($1,$2,$3)`,
           [responseId, answer.questionId, answer.value]
         );
       }
@@ -103,7 +107,7 @@ export class SubmissionRepository {
     }
 
     const rows = await this.pool.query<DbRow>(
-      `SELECT responseId, questionnaireId, submittedAt FROM survey_response ORDER BY submittedAt DESC`
+      `SELECT "responseId", "questionnaireId", "submittedAt" FROM "surveyResponse" ORDER BY "submittedAt" DESC`
     );
 
     return rows.rows.map((r) => ({
@@ -120,13 +124,13 @@ export class SubmissionRepository {
     }
 
     const main = await this.pool.query<DbRow>(
-      `SELECT responseId, questionnaireId, submittedAt FROM survey_response WHERE responseId = $1 LIMIT 1`,
+      `SELECT "responseId", "questionnaireId", "submittedAt" FROM "surveyResponse" WHERE "responseId" = $1 LIMIT 1`,
       [responseId]
     );
     if (!main.rows.length) return undefined;
 
     const answers = await this.pool.query<AnswerRow>(
-      `SELECT responseId, questionId, value FROM survey_response_answer WHERE responseId = $1 ORDER BY id ASC`,
+      `SELECT "responseId", "questionId", value FROM "surveyResponseAnswer" WHERE "responseId" = $1 ORDER BY id ASC`,
       [responseId]
     );
 
