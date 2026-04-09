@@ -8,6 +8,8 @@ import { SurveyRepository } from './repositories/surveyRepository.js';
 import { SurveyService } from './services/surveyService.js';
 import { buildSurveyRoutes } from './routes/surveyRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { apiSchema } from './schema.js';
+import { buildResolvers } from './resolvers.js';
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -32,6 +34,9 @@ async function bootstrap(): Promise<void> {
 
   const surveyRepository = new SurveyRepository(ds);
   const surveyService = new SurveyService(surveyRepository);
+  const resolvers = buildResolvers(surveyService);
+  void apiSchema;
+  void resolvers;
 
   app.use('/api', buildSurveyRoutes(surveyService));
   app.use(errorHandler);
