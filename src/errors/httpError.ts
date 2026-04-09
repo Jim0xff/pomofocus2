@@ -20,3 +20,15 @@ export class RequiredAnswerMissingError extends HttpError {
     super(400, 'REQUIRED_ANSWER_MISSING', `required question ${questionId} is missing`);
   }
 }
+
+export class SubmissionNotFoundError extends HttpError {
+  constructor() {
+    super(404, 'SUBMISSION_NOT_FOUND', 'submission not found');
+  }
+}
+
+export class UnauthorizedError extends HttpError {
+  constructor() {
+    super(401, 'UNAUTHORIZED', 'unauthorized');
+  }
+}

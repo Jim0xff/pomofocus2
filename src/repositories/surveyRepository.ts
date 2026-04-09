@@ -41,4 +41,27 @@ export class SurveyRepository {
       return submission;
     });
   }
+
+  listSubmissions(): Promise<SurveySubmission[]> {
+    return this.ds.getRepository(SurveySubmission).find({
+      order: { submittedAt: 'DESC' }
+    });
+  }
+
+  async findSubmissionDetail(submissionId: string): Promise<{ submission: SurveySubmission | null; answers: SurveySubmissionAnswer[] }> {
+    const submissionRepo = this.ds.getRepository(SurveySubmission);
+    const answersRepo = this.ds.getRepository(SurveySubmissionAnswer);
+
+    const submission = await submissionRepo.findOne({ where: { submissionId } });
+    if (!submission) {
+      return { submission: null, answers: [] };
+    }
+
+    const answers = await answersRepo.find({
+      where: { submissionId },
+      order: { id: 'ASC' }
+    });
+
+    return { submission, answers };
+  }
 }

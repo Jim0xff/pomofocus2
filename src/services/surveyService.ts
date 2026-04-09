@@ -1,8 +1,8 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { SurveyRepository } from '../repositories/surveyRepository.js';
-import { InvalidParamsError, RequiredAnswerMissingError } from '../errors/httpError.js';
-import { toSubmissionListItemDto, toSurveyQuestionDto } from '../mappers/surveyMapper.js';
+import { InvalidParamsError, RequiredAnswerMissingError, SubmissionNotFoundError } from '../errors/httpError.js';
+import { toSubmissionDetailDto, toSubmissionListItemDto, toSurveyQuestionDto } from '../mappers/surveyMapper.js';
 
 const submitSchema = z.object({
   answers: z.array(
@@ -59,5 +59,25 @@ export class SurveyService {
       submission_id: dto.submission_id,
       submitted_at: dto.submitted_at
     };
+  }
+
+  async listAdminSubmissions(): Promise<{ items: Array<{ submission_id: string; submitted_at: string }> }> {
+    const submissions = await this.repo.listSubmissions();
+    return {
+      items: submissions.map(toSubmissionListItemDto)
+    };
+  }
+
+  async getAdminSubmissionDetail(submissionId: string): Promise<{ submission_id: string; submitted_at: string; answers: Array<{ question_id: string; answer_text: string }> }> {
+    if (!submissionId || submissionId.trim().length === 0) {
+      throw new InvalidParamsError();
+    }
+
+    const { submission, answers } = await this.repo.findSubmissionDetail(submissionId);
+    if (!submission) {
+      throw new SubmissionNotFoundError();
+    }
+
+    return toSubmissionDetailDto(submission, answers);
   }
 }
