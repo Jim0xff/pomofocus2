@@ -4,6 +4,10 @@ import cors from 'cors';
 import { randomUUID } from 'crypto';
 import { initializeDataSource } from './infra/datasource.js';
 import { seedSurveyQuestions } from './seed/surveySeed.js';
+import { SurveyRepository } from './repositories/surveyRepository.js';
+import { SurveyService } from './services/surveyService.js';
+import { buildSurveyRoutes } from './routes/surveyRoutes.js';
+import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -25,6 +29,12 @@ app.get('/healthz', (_req, res) => {
 async function bootstrap(): Promise<void> {
   const ds = await initializeDataSource();
   await seedSurveyQuestions(ds);
+
+  const surveyRepository = new SurveyRepository(ds);
+  const surveyService = new SurveyService(surveyRepository);
+
+  app.use('/api', buildSurveyRoutes(surveyService));
+  app.use(errorHandler);
 
   app.listen(port, () => {
     // eslint-disable-next-line no-console
